@@ -12,7 +12,31 @@ function el(tag, attrs, kids) {
   [].concat(kids || []).forEach(c => c != null && e.append(c));
   return e;
 }
-const QS = new URLSearchParams(location.search);
+// 구글 앱스 스크립트로 열면 Code.gs가 주소 뒤 값(GAS_QS)과 앱 주소(GAS_BASE)를 넣어 준다
+let QS = new URLSearchParams(window.GAS_QS != null ? window.GAS_QS : location.search);
+const APP_BASE = window.GAS_BASE || (location.origin + location.pathname);
+const appUrl = q => APP_BASE + q + (QS.has('demo') ? (q.includes('?') ? '&' : '?') + 'demo' : '');
+const APP_VER = 'v3.2';
+// 오류가 나면 빈 화면 대신 아래쪽 빨간 상자에 이유를 보여 준다 (화면을 찍어 보내면 바로 고칠 수 있게)
+function showErr(m) {
+  try {
+    let b = document.getElementById('apperr');
+    if (!b) { b = document.createElement('div'); b.id = 'apperr'; b.style.cssText = 'position:fixed;left:8px;right:8px;bottom:8px;z-index:99;background:#ffe3e3;color:#9b1c1c;border:2px solid #e03131;border-radius:12px;padding:10px 12px;font:14px/1.4 sans-serif;white-space:pre-wrap;max-height:40vh;overflow:auto'; b.onclick = () => b.remove(); (document.body || document.documentElement).append(b); }
+    b.textContent = '⚠ 오류가 났어요 (' + APP_VER + ') — 이 화면을 찍어 보내 주세요. 누르면 닫혀요.\n' + String(m).slice(0, 600);
+  } catch (e) {}
+}
+window.addEventListener('error', e => { if (e.message) showErr(e.message + (e.filename ? '\n' + e.lineno + ':' + e.colno : '')); });
+window.addEventListener('unhandledrejection', e => showErr((e.reason && (e.reason.stack || e.reason.message)) || e.reason));
+// 화면 이동: 앱스 스크립트 안에서는 페이지를 새로 불러오지 않고 그 자리에서 화면을 다시 그린다.
+// (구글 틀 안의 페이지는 다른 주소로 이동하면 빈 화면이 되므로, 주소창 바꾸기는 되면 하고 안 되면 건너뛴다)
+function go(q) {
+  if (QS.has('demo') && !/demo/.test(q)) q += (q.includes('?') && q.length > 1 ? '&' : '') + 'demo';
+  if (!window.GAS_BASE && !/googleusercontent\.com$/.test(location.hostname)) { location.href = location.pathname + q; return; }
+  QS = new URLSearchParams(q); document.body.className = '';
+  try { const p = {}; QS.forEach((v, k) => (p[k] = v)); google.script.history.push(null, p); } catch (e) { console.warn('주소창 바꾸기 건너뜀', e); }
+  Promise.resolve().then(() => window.boot()).catch(showErr);
+}
+function navLink(text, q, cls) { return el('a', { class: cls || 'b link', href: appUrl(q), target: window.GAS_BASE ? '_top' : false, text, onclick: e => { e.preventDefault(); go(q); } }); }
 const clean = v => (v === undefined ? null : JSON.parse(JSON.stringify(v)));
 const MAIL = '@uribanfest.app';
 

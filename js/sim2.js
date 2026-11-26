@@ -23,14 +23,14 @@
   const beatPos = (t0, dur, ct) => (ct - t0) / dur;
   const beatHit = (t0, dur, zone, ct) => { const p = beatPos(t0, dur, ct); return p >= zone[0] && p <= zone[1]; };
 
-  /* 10초 세기: 0.01초 단위 기록, 10.00초와의 차이로 순위(같으면 공동) */
-  function tenGrade(t0, presses) {
-    const rows = [];
+  /* 초 세기: 0.01초 단위 기록, 목표 초(기본 10초)와의 차이로 순위(같으면 공동) */
+  function tenGrade(t0, presses, sec) {
+    const rows = [], goal = (sec || 10) * 100;
     for (const id in presses) {
       const ms = presses[id] - t0;
       if (ms < 0) continue;
       const rec = Math.round(ms / 10);              // 0.01초 단위 정수
-      rows.push({ id, rec, diff: Math.abs(rec - 1000) });
+      rows.push({ id, rec, diff: Math.abs(rec - goal) });
     }
     return rankBy(rows, r => r.diff, false);
   }
@@ -69,38 +69,6 @@
     }
   }
 
-  /* 반 대항 로켓 */
-  class Rocket {
-    constructor(teams, opts) {
-      opts = opts || {};
-      this.need = opts.need || 5; this.ratio = opts.ratio || 0.7;
-      this.teams = {};                       // tm -> {ids, eng, rank, last}
-      for (const id in teams) { const tm = teams[id]; (this.teams[tm] = this.teams[tm] || { ids: [], eng: 0, rank: 0, last: null }).ids.push(id); }
-      this.nDone = 0;
-    }
-    // 한 신호 판정: presses = {id: ct}, 신호 구간 [s0, s1] 안의 첫 입력만 인정
-    signal(s0, s1, presses) {
-      const done = [];
-      for (const tm in this.teams) {
-        const T = this.teams[tm];
-        const need = Math.max(1, Math.ceil(T.ids.length * this.ratio - 1e-9));
-        const ok = T.ids.filter(id => presses[id] != null && presses[id] >= s0 && presses[id] <= s1).length;
-        T.last = { ok, of: T.ids.length, need };
-        if (T.rank) continue;
-        if (ok >= need) { T.eng++; if (T.eng >= this.need) done.push(tm); }
-      }
-      if (done.length) { const r = this.nDone + 1; done.forEach(tm => (this.teams[tm].rank = r)); this.nDone += done.length; }
-      return done;
-    }
-    allDone() { return Object.values(this.teams).every(T => T.rank); }
-    ranking() {
-      const rows = Object.keys(this.teams).map(tm => ({ tm: +tm, eng: this.teams[tm].eng, fin: this.teams[tm].rank || 0 }));
-      // 발사한 팀은 발사 순위, 못 한 팀은 엔진 수로
-      rows.forEach(r => (r.key = r.fin ? 1000 - r.fin : r.eng));
-      return rankBy(rows, r => r.key, true);
-    }
-  }
-
   /* 틀린 그림: 터치가 어느 틀린 곳에 들었는가 */
   function diffHit(spots, x, y, pad) {
     pad = pad || 0;
@@ -116,12 +84,14 @@
 
   /* ───────── 15. 구슬 경주 물리 ───────── */
   const CW = 1000, CH = 7200, BR = 13, FIN = CH - 160;
-  function buildCourse(seed) {
+  const SECTIONS = [null, ['zig', 'pegs', 'bump', 'zig', 'funnel'], ['zig', 'pegs', 'mill', 'bump', 'zig', 'mill', 'bump', 'funnel'],
+    ['zig', 'pegs', 'mill', 'bump', 'zig', 'mill', 'pegs', 'bump', 'mill', 'zig', 'funnel']];
+  function buildCourse(seed, lv) {
     const r = Sim.rng(seed), segs = [], bumps = [], mills = [];
     const seg = (x1, y1, x2, y2, k) => segs.push({ x1, y1, x2, y2, k: k || 'board' });
     let y = 700;
     // 출발 바구니 바닥(출발 신호 때 열림)은 따로 처리
-    const sections = ['zig', 'pegs', 'mill', 'bump', 'zig', 'mill', 'bump', 'funnel'];
+    const sections = SECTIONS[lv === 1 || lv === 3 ? lv : 2];
     sections.forEach((kind, si) => {
       if (kind === 'zig') {
         for (let k = 0; k < 4; k++) {
@@ -150,14 +120,15 @@
         y += 320;
       }
     });
-    // 남은 길이는 결승선까지 직선 구간
-    return { segs, bumps, mills, len: Math.max(y + 200, FIN - 100) };
+    // 코스 길이: 마지막 깔때기 아래로 조금 떨어지면 결승선
+    return { segs, bumps, mills, len: y + 360 };
   }
   class Marble {
     constructor(pids, opts) {
       opts = opts || {};
-      this.seed = opts.seed || 1; this.dur = opts.dur || 120;
-      this.course = buildCourse(this.seed);
+      this.seed = opts.seed || 1; this.dur = opts.dur || 120; this.spd = opts.spd || 1;   // spd: 구슬이 떨어지는 빠르기(시계는 그대로)
+      this.course = buildCourse(this.seed, opts.lv);
+      this.CH = this.course.len; this.FIN = this.CH - 160;
       this.r = Sim.rng(this.seed * 7 + 3);
       this.b = []; this.idx = {}; this.order = []; this.left = this.dur; this.ph = 'idle'; this.t = 0; this.ev = [];
       const ids = pids.slice();
@@ -199,7 +170,7 @@
     }
     step(dt) {
       if (this.ph !== 'play') return;
-      this.left -= dt; this.t += dt;
+      this.left -= dt; dt *= this.spd; this.t += dt;
       const C = this.course, sub = Math.max(1, Math.ceil(dt * 240)), h = dt / sub;
       for (let s = 0; s < sub; s++) {
         C.mills.forEach(m => (m.a += m.w * h));
@@ -227,7 +198,7 @@
               if (vn < 0) { const j = -(1 + 0.6) * vn / 2; b.vx += j * nx; b.vy += j * ny; o.vx -= j * nx; o.vy -= j * ny; }
             }
           }
-          if (b.y >= FIN) { b.fin = this.order.length + 1; b.time = +this.t.toFixed(2); this.order.push(b.id); this.ev.push({ t: 'fin', id: b.id, rank: b.fin }); }
+          if (b.y >= this.FIN) { b.fin = this.order.length + 1; b.time = +this.t.toFixed(2); this.order.push(b.id); this.ev.push({ t: 'fin', id: b.id, rank: b.fin }); }
         }
       }
       // 오래 갇힌 구슬은 살짝 흔들어 준다
@@ -250,5 +221,5 @@
   }
   Marble.CW = CW; Marble.CH = CH; Marble.BR = BR; Marble.FIN = FIN;
 
-  return { norm, moleWinner, beatPos, beatHit, tenGrade, fmt2, tasteScore, Solo, Rocket, diffHit, spamLock, buildCourse, Marble };
+  return { norm, moleWinner, beatPos, beatHit, tenGrade, fmt2, tasteScore, Solo, diffHit, spamLock, buildCourse, Marble };
 });

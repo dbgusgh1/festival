@@ -114,7 +114,7 @@ function teacherBox(root) {
       body.replaceChildren(...(ks.length ? ks.map(k => { const r = v[k], d = new Date(r.t);
         return el('div', { class: 'cblk' }, [el('b', { text: `${d.getMonth() + 1}월 ${d.getDate()}일 · 방 ${k} · ${r.n || 0}명` }),
           ...(r.games || []).map(g => el('div', { class: 'hint', text: `${GAMES[g.gid] ? GAMES[g.gid].icon + ' ' + GAMES[g.gid].name : g.gid}${g.practice ? ' (연습)' : ''} — ${(g.top || []).join(', ')}` })),
-          el('a', { class: 'b sm', href: location.pathname + '?host=' + k + (QS.has('demo') ? '&demo' : ''), text: '이 방 다시 열기' })]); }) : [el('div', { class: 'hint', text: '아직 연 행사가 없어요.' })]));
+          navLink('이 방 다시 열기', '?host=' + k, 'b sm')]); }) : [el('div', { class: 'hint', text: '아직 연 행사가 없어요.' })]));
     });
   }
 

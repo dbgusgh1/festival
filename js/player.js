@@ -45,7 +45,7 @@ function cookieStage(root, title) {
 async function startPlayer(code) {
   const app = $('#app'), base = 'rooms/' + code; document.body.className = 'phone';
   const uid = await Net.anon(), mine = base + '/players/' + uid;
-  if (!(await Net.get(base + '/meta'))) { app.replaceChildren(el('div', { class: 'card' }, [el('div', { class: 'big', text: `${code}번 방을 찾을 수 없어요` }), el('div', { class: 'sub', text: '교실 화면의 방 번호를 다시 확인해 주세요.' }), el('a', { class: 'b pri', href: location.pathname, text: '처음으로' })])); return; }
+  if (!(await Net.get(base + '/meta'))) { app.replaceChildren(el('div', { class: 'card' }, [el('div', { class: 'big', text: `${code}번 방을 찾을 수 없어요` }), el('div', { class: 'sub', text: '교실 화면의 방 번호를 다시 확인해 주세요.' }), navLink('처음으로', '?', 'b pri')])); return; }
   let me = await Net.get(mine);
   if (!me || !me.n) me = await new Promise(res => {
     const inp = el('input', { type: 'text', maxlength: 8, placeholder: '닉네임 (8자까지)' }), err = el('div', { class: 'err' });
@@ -77,16 +77,20 @@ async function startPlayer(code) {
   let lastOx = null, lastRes = null, endInfo = null, lastTs = 0, toastT = 0, cam = { x: 800, y: 450 }, endShown = false, joined = true;
 
   Net.on(base + '/pub', v => { const prev = S.pub; S.pub = v || {}; if (prev.gid !== S.pub.gid || prev.scene !== S.pub.scene) { S.disp = {}; S.fallT = {}; lastOx = null; if (S.pub.ph !== 'result') lastRes = null; lastMsg = null; } if (S.pub.ph === 'play' && S.pub.gid === 'ox') lastOx = null; if (S.pub.scene === 'end') showEnd(); });
-  Net.on(base + '/st', v => (S.st = v));
+  // 지렁이: 사탕·가시가 안 바뀌면 빠진 채로 온다 → 앞에 받은 것을 그대로 쓴다
+  Net.on(base + '/st', v => { if (v && v.w && S.st && S.st.w) { if (!v.ob && S.st.ob) v.ob = S.st.ob; if (!v.mn && S.st.mn) v.mn = S.st.mn; } S.st = v; });
   Net.on(base + '/grid', v => (S.grid = v));
   Net.on(base + '/img', v => { S.img = v; if (env.diff) env.diff.setImg(v); });
-  Net.on(base + '/players', v => { S.players = v || {}; const m = S.players[uid]; if (m) me = m; else if (joined) { joined = false; app.replaceChildren(el('div', { class: 'card' }, [el('div', { class: 'big', text: '방에서 나왔어요' }), el('a', { class: 'b pri', href: location.href, text: '다시 들어가기' })])); } });
+  Net.on(base + '/players', v => { S.players = v || {}; const m = S.players[uid]; if (m) me = m; else if (joined) { joined = false; app.replaceChildren(el('div', { class: 'card' }, [el('div', { class: 'big', text: '방에서 나왔어요' }), navLink('다시 들어가기', '?r=' + code, 'b pri')])); } });
   Net.on(base + '/sc/' + uid, v => (score.textContent = (v || 0) + '점'));
   Net.on(base + '/pv/' + uid, v => {
     if (!v || v.ts === lastTs) return; lastTs = v.ts;
     if (v.k === 'msg' || (v.k === 'diff' && v.b)) { lastMsg = v; v.rt = performance.now(); if (navigator.vibrate) navigator.vibrate(40); } if (v.k === 'diff' && env.diff) env.diff.mark(v);
+    if (v.k === 'ox' && ox && ox.ui && Net.now() - v.ts < 4000) { if (v.r === 'out') oxToast('😵 아쉬워요! 탈락', '응원석에서 친구들을 응원해 주세요'); else oxToast('🎉 정답! 생존', `정답은 ${v.a}`); if (navigator.vibrate) navigator.vibrate(v.r === 'out' ? [80, 60, 80] : 40); }
+    if (v.k === 'oxback' && ox && ox.ui) oxToast('💪 부활 성공!', '경기장으로 돌아왔어요');
     if (v.k === 'ox') lastOx = v.r; else if (v.k === 'res') lastRes = v; else if (v.k === 'end') { endInfo = v; showEnd(); }
-    const T = { out: '삐익! 움직이다 걸렸어요', fin: `골인! ${v.rank}등`, cut: '선이 끊겼어요! 기지에서 다시 출발', block: '방패가 막아 줬어요!', slowed: '눈송이에 맞아 느려졌어요', die: '흩어졌어요! 2초 뒤 다시 출발', item: v.it ? ITEM_ICON[v.it][0] + ' ' + ITEM_ICON[v.it][2] + ' 획득!' : '' }[v.k];
+    const TH = THEMES[S.pub.theme] || THEMES.city;
+    const T = { out: '삐익! 움직이다 걸렸어요', fin: `골인! ${v.rank}등`, cut: v.why === 'self' ? '내 선을 밟았어요! 기지에서 다시' : v.why === 'haz' ? TH.haz + '에 닿았어요! 기지에서 다시' : '선이 끊겼어요! 기지에서 다시 출발', block: '방패가 막아 줬어요!', slowed: '눈송이에 맞아 느려졌어요', die: v.why === 'mine' ? '가시에 찔렸어요! 2초 뒤 다시' : '흩어졌어요! 2초 뒤 다시 출발', crab: '집게! 출발점으로 돌아가요', warp: '🌀 순간 이동!', item: v.it ? ITEM_ICON[v.it][0] + ' ' + ITEM_ICON[v.it][2] + ' 획득!' : '' }[v.k];
     if (T && Net.now() - v.ts < 4000) { toast.textContent = T; toast.className = 'on'; toastT = performance.now(); if (navigator.vibrate) navigator.vibrate(60); }
   });
 
@@ -100,17 +104,82 @@ async function startPlayer(code) {
   joy.addEventListener('touchmove', e => e.preventDefault(), { passive: false });
   setInterval(() => { const x = +jv.x.toFixed(2), y = +jv.y.toFixed(2); if (x !== sent.x || y !== sent.y) { sent = { x, y }; Net.set(base + '/in/' + uid, sent); } }, 80);
 
+  /* ── 체육 OX 서바이벌: 원본 폰 화면(문제 칸·조이스틱·이모지·부활 미션)을 3D 쿼터뷰 위에 올린다 ── */
+  const pmid = $('#pmid', app);
+  var ox = { ui: null, tv: false, rvOn: false, toastH: 0, shKey: '' };
+  function oxToast(main, sub, ms) { const t = ox.ui.toast; t.replaceChildren(main, sub ? el('small', { text: sub }) : ''); t.classList.add('show'); clearTimeout(ox.toastH); ox.toastH = setTimeout(() => t.classList.remove('show'), ms || 2200); }
+  function oxUI() {
+    if (ox.ui) return ox.ui;
+    const qnum = el('span', { id: 'qnum', text: '대기' }), qtext = el('span', { id: 'qtext' }), qtimer = el('span', { id: 'qtimer', text: '–' });
+    const stat = el('span', { class: 'chip', id: 'ostat' });
+    const viewBtn = el('button', { class: 'chip', text: '📺 TV', onclick: () => { ox.tv = !ox.tv; viewBtn.textContent = ox.tv ? '📱 내 시점' : '📺 TV'; } });
+    const pal = el('div', { id: 'emojiPal', class: 'hidden' }, OX3D.EMOJIS.map((e, i) => el('button', { text: e, onclick: () => { env.send({ k: 'emo', i }); pal.classList.add('hidden'); } })));
+    const emo = el('button', { id: 'emojiBtn', text: '😊', onclick: () => pal.classList.toggle('hidden') });
+    const rvBtn = el('button', { id: 'reviveBtn', class: 'hidden', onclick: () => startRevive() });
+    const cheer = el('div', { id: 'cheerTag', class: 'hidden' }), toastEl = el('div', { id: 'oxtoast' });
+    const rvProg = el('span'), rvBody = el('div', { class: 'mbody' });
+    const rv = el('div', { id: 'revive', class: 'overlay hidden' }, [el('div', { class: 'modal', style: 'width:min(460px,100%)' }, [el('div', { class: 'mhead' }, ['💪 부활 미션 ', el('span', { class: 'sp' }), rvProg]), rvBody])]);
+    const sw = el('div', { class: 'swatches' }), shirt = el('div', { id: 'oxshirt' }, [el('b', { text: '옷 색깔 고르기' }), sw]);
+    const msg3 = el('div', { id: 'ox3msg', class: 'hidden' });
+    ox.ui = { root: el('div', { id: 'oxui' }, [el('div', { id: 'topbar' }, [stat, el('span', { class: 'sp' }), viewBtn]), el('div', { id: 'qbar' }, [qnum, qtext, qtimer]), el('div', { id: 'qhint', text: '⭕ 왼쪽 파란 칸 · ❌ 오른쪽 빨간 칸' }), shirt, msg3, emo, pal, rvBtn, cheer, toastEl, rv]),
+      qnum, qtext, qtimer, stat, rvBtn, cheer, toast: toastEl, rv, rvProg, rvBody, sw, shirt, pal, msg3 };
+    return ox.ui;
+  }
+  // 부활 미션 (원본 startRevive와 같음): 5문제 중 3개 이상이면 다음 문제 때 복귀. 채점은 교실 화면이 다시 한다.
+  function startRevive() {
+    const my = S.st && S.st.p && S.st.p[uid]; if (!my || !(my[2] & 4) || ox.rvOn) return;
+    ox.rvOn = true; env.send({ k: 'rvs' });
+    const U = ox.ui, idx = shuffle(OX_REVIVE_BANK.map((_, k) => k)).slice(0, 5), answers = []; let i = 0, score = 0;
+    U.rv.classList.remove('hidden');
+    const show = () => {
+      U.rvProg.textContent = `${i + 1} / 5 · 맞힘 ${score}`;
+      const q = OX_REVIVE_BANK[idx[i]];
+      const ans = a => {
+        const ok = a === q[1]; if (ok) score++; answers.push(a);
+        U.rvBody.replaceChildren(el('div', { style: 'text-align:center;padding:24px 0' }, [el('div', { style: 'font-size:60px', text: ok ? '⭕' : '❌' }), el('div', { class: 'big', text: ok ? '정답!' : '아쉬워요' }), el('div', { class: 'muted', text: `정답은 ${q[1]}` })]));
+        setTimeout(() => { i++; if (i < 5) show(); else finish(); }, 850);
+      };
+      U.rvBody.replaceChildren(el('p', { class: 'muted', text: '5문제 중 3개 이상 맞히면 부활!' }), el('div', { class: 'big', style: 'font-size:24px;line-height:1.4', text: q[0] }),
+        el('div', { class: 'oxbtns' }, [el('button', { style: 'background:#dfe8ff', text: '⭕', onclick: () => ans('O') }), el('button', { style: 'background:#ffe0e0', text: '❌', onclick: () => ans('X') })]));
+    };
+    const finish = () => {
+      const pass = score >= 3; env.send({ k: 'rv', qs: idx, a: answers });
+      U.rvProg.textContent = `결과 ${score} / 5`;
+      U.rvBody.replaceChildren(el('div', { style: 'text-align:center;padding:18px 0' }, [el('div', { style: 'font-size:60px', text: pass ? '💪' : '📣' }), el('div', { class: 'big', text: pass ? '부활 성공!' : '부활 실패' }),
+        el('p', { text: pass ? '다음 문제가 시작되면 경기장으로 돌아가요.' : '응원석에서 친구들을 응원해 주세요!' }), el('button', { class: 'btn y', text: '확인', onclick: () => { U.rv.classList.add('hidden'); ox.rvOn = false; } })]));
+    };
+    show();
+  }
+  function oxFrame(P, st) {
+    const U = oxUI(); if (!U.root.isConnected) pmid.append(U.root);
+    OX3D.load();
+    if (OX3D.ready) { OX3D.attach(pmid); OX3D.frame({ st, pub: P, players: S.players, me: uid, tv: ox.tv, nameOf: pl => nameOf(pl) }); }
+    U.msg3.classList.toggle('hidden', OX3D.ready); U.msg3.textContent = OX3D.failed ? '3D 화면을 불러오지 못했어요. 교실 화면을 보며 조이스틱으로 움직여요.' : '3D 경기장 불러오는 중…';
+    const [num, text, tm, warn] = oxQbar(P, st);
+    if (U.qnum.textContent !== num) U.qnum.textContent = num; if (U.qtext.textContent !== text) U.qtext.textContent = text; if (U.qtimer.textContent !== tm) U.qtimer.textContent = tm; U.qtimer.classList.toggle('warn', !!warn);
+    const my = st.p && st.p[uid], n = Object.keys(st.p || {}).length, sTxt = `🏫 ${code} · 👥 ${n} · 🙋 ${st.alive != null ? st.alive : n}`;
+    if (U.stat.textContent !== sTxt) U.stat.textContent = sTxt;
+    const canRv = !!my && !!(my[2] & 4) && !ox.rvOn && P.ph !== 'result', alive = !my || !!(my[2] & 1), pend = !!my && !!(my[2] & 2);
+    U.rvBtn.classList.toggle('hidden', !canRv);
+    if (canRv) U.rvBtn.textContent = '💪 부활 미션 도전!';
+    U.cheer.classList.toggle('hidden', alive); U.cheer.textContent = pend ? '✅ 부활 확정! 다음 문제에 경기장으로 돌아가요' : '📣 응원석에서 친구들을 응원해요!';
+    // 옷 색깔(원본 입장 화면의 8색): 게임 시작 전 안내 화면에서 고른다
+    const curSh = me.sh != null ? me.sh : (me.c || 0) % 8, shKey = curSh + ':' + P.ph;
+    U.shirt.classList.toggle('hidden', P.ph !== 'intro');
+    if (shKey !== ox.shKey) { ox.shKey = shKey; U.sw.replaceChildren(...OX3D.SHIRTS.map((cl, i) => el('button', { style: 'background:' + cl, class: i === curSh ? 'on' : '', onclick: () => { me.sh = i; Net.set(mine + '/sh', i); } }))); }
+  }
+
   function showEnd() {
     if (endShown || S.pub.scene !== 'end' || !endInfo) return; endShown = true; overlay.classList.remove('hidden');
     cookieStage(overlay, '행운의 편지가 든 포춘쿠키').then(() => {
       const st = endInfo.st || {}, L = [];
-      if (st.fall) L.push(`바닥이 ${st.fall}번 갈라져도 다시 돌아온 너,`); if (st.out) L.push(`술래에게 ${st.out}번 걸리고도 다시 달린 너,`); if (st.die) L.push(`지렁이가 ${st.die}번 흩어져도 다시 출발한 너,`); if (st.cut) L.push('선이 끊겨도 다시 그리러 나간 너,'); if (st.fin) L.push(`결승선을 ${st.fin}번 통과한 너,`); if (st.mole) L.push(`두더지를 ${st.mole}마리나 잡은 날쌘 너,`); if (st.fix) L.push(`그림 ${st.fix}곳을 고쳐 준 꼼꼼한 너,`);
+      if (st.fall) L.push(`바닥이 ${st.fall}번 갈라져도 다시 돌아온 너,`); if (st.oxout) L.push(`OX에서 탈락해도 응원석에서 끝까지 친구들을 응원한 너,`); if (st.revive) L.push(`부활 미션을 ${st.revive}번 성공하고 다시 달려 나온 너,`); if (st.out) L.push(`술래에게 ${st.out}번 걸리고도 다시 달린 너,`); if (st.die) L.push(`지렁이가 ${st.die}번 흩어져도 다시 출발한 너,`); if (st.cut) L.push('선이 끊겨도 다시 그리러 나간 너,'); if (st.fin) L.push(`결승선을 ${st.fin}번 통과한 너,`); if (st.mole) L.push(`두더지를 ${st.mole}마리나 잡은 날쌘 너,`); if (st.fix) L.push(`그림 ${st.fix}곳을 고쳐 준 꼼꼼한 너,`);
       L.push(KIND_LINES[me.c % KIND_LINES.length]); L.push(KIND_LINES[(me.c + 3) % KIND_LINES.length]);
       overlay.replaceChildren(el('div', { class: 'letter' }, [el('div', { class: 'lt', text: `${me.n}에게 온 행운의 편지` }), ...L.map(t => el('p', { text: t })), S.pub.letter ? el('p', { class: 'tl', text: '선생님의 한마디: ' + S.pub.letter }) : null, el('div', { class: 'mission', text: '이 편지를 옆 친구에게 소리 내어 읽어 주면 행운이 두 배가 돼요.' })]));
     });
   }
 
-  const VIEW = { maze: 300, terr: 420, worm: 720 };
+  const VIEW = { maze: 300, terr: 560, worm: 720 };
   function frame(ms) {
     S.t = ms / 1000; const P = S.pub, g = GAMES[P.gid], st = S.st || {}, t = S.t;
     const w = pv.clientWidth, hgt = pv.clientHeight, dpr = Math.min(2, devicePixelRatio || 1);
@@ -122,14 +191,18 @@ async function startPlayer(code) {
     pv.classList.toggle('hidden', !!askOn); pask.classList.toggle('hidden', !askOn);
     if (askOn && (P.ask.key !== askKey || !!P.ask.closed !== askClosed)) {
       if (P.ask.key !== askKey && !(lastMsg && performance.now() - lastMsg.rt < 4000)) lastMsg = null;
-      askKey = P.ask.key; askClosed = !!P.ask.closed; env.diff = null; env.c = me.c; env.name = me.n; env.marble = P.gid === 'marble'; env.hat = { mole: 'explorer', beat: 'band', taste: 'party', tquiz: 'party', memory: 'city', rocket: 'sea', zoom: 'explorer', ten: 'city', solo: 'desert', marble: null, diff: 'night' }[P.gid];
-      env.teamColor = P.gid === 'rocket' && me.tm != null ? TEAM[me.tm].c : null;
+      askKey = P.ask.key; askClosed = !!P.ask.closed; env.diff = null; env.c = me.c; env.name = me.n; env.marble = P.gid === 'marble'; env.hat = { mole: 'explorer', beat: 'band', taste: 'party', tquiz: 'party', memory: 'city', zoom: 'explorer', ten: 'city', solo: 'desert', marble: null, diff: 'night' }[P.gid];
+      env.teamColor = null;
       renderAsk(pask, P.ask, env); if (env.diff) env.diff.setImg(S.img);
     }
     if (!askOn) askKey = null;
     if (env.diff && P.df) env.diff.setFixed(P.df.fixed);
-    joy.classList.toggle('hidden', !play);
-    place.textContent = P.scene === 'game' || P.scene === 'fly' ? (g ? g.icon + ' ' + g.place : '') : P.scene === 'end' ? '🏫 교실' : '';
+    const oxOn = P.scene === 'game' && P.gid === 'ox';
+    document.body.classList.toggle('ox3', oxOn); document.body.classList.toggle('oxres', oxOn && P.ph === 'result');
+    if (oxOn) oxFrame(P, st); else { OX3D.detach(); if (ox.ui) { ox.ui.root.remove(); ox.ui.rv.classList.add('hidden'); ox.rvOn = false; } }
+    joy.classList.toggle('hidden', !(play || (oxOn && P.ph !== 'result')));
+    const ptxt = P.scene === 'game' || P.scene === 'fly' ? (g ? g.icon + ' ' + g.place : '') : P.scene === 'end' ? '🏫 교실' : '', pk = ptxt + (P.lv || '') + P.scene;
+    if (place.dataset.k !== pk) { place.dataset.k = pk; place.replaceChildren(ptxt, (P.scene === 'game' || P.scene === 'fly') && P.lv ? el('span', { class: 'lvb', style: 'background:' + LVCOL[P.lv], text: LVNAME[P.lv] }) : ''); }
     let B = '', U = '', cls = '';
     const view = P.scene === 'game' && VIEW[P.gid] && S.st && P.ph !== 'intro';
     if (view) {
@@ -140,10 +213,18 @@ async function startPlayer(code) {
       c.fillStyle = P.gid === 'maze' ? '#1e7fd6' : P.gid === 'worm' ? '#ff8fc7' : '#222'; c.fillRect(0, 0, pv.width, pv.height);
       c.setTransform(sc, 0, 0, sc, pv.width / 2 - cam.x * sc, pv.height / 2 - cam.y * sc);
       if (P.gid === 'maze') drawMaze(c, S); else if (P.gid === 'terr') drawTerr(c, S); else drawWorm(c, S);
+      if (P.gid === 'terr' && S.board) {   // 작은 전체 지도: 내 위치와 우리 팀 땅
+        const mw = pv.width * 0.34, mh = mw * Sim.Terr.TH / Sim.Terr.TW, mx = pv.width - mw - 8 * dpr, my = 8 * dpr;
+        c.setTransform(1, 0, 0, 1, 0, 0); c.globalAlpha = 0.92; c.drawImage(S.board, mx, my, mw, mh); c.globalAlpha = 1;
+        c.lineWidth = 2 * dpr; c.strokeStyle = '#fff'; c.strokeRect(mx, my, mw, mh);
+        const k = mw / Sim.Terr.TW; c.strokeStyle = '#ffd400'; c.strokeRect(mx + (cam.x - VIEW.terr / 2) * k, my + (cam.y - pv.height / sc / 2) * k, VIEW.terr * k, pv.height / sc * k);
+        c.fillStyle = '#e63946'; c.beginPath(); c.arc(mx + cam.x * k, my + cam.y * k, 4 * dpr, 0, 7); c.fill();
+      }
     } else {
       const hatBy = { ox: 'band', red: 'gym', maze: 'explorer', terr: P.theme && THEMES[P.theme] ? THEMES[P.theme].hat : 'city' }[P.scene === 'game' || P.scene === 'fly' ? P.gid : ''] || (P.scene === 'end' ? 'party' : null);
       const s = Math.min(pv.width, pv.height) * 0.26;
-      drawChar(c, pv.width / 2, pv.height / 2, s, me.c, { hat: hatBy, face: P.scene === 'end' || lastOx === 'right' ? 'laugh' : lastOx === 'fell' ? 'shock' : 'smile', bob: -Math.abs(Math.sin(t * 3)) * s * 0.15, team: P.gid === 'terr' && P.scene === 'game' && me.tm != null ? me.tm : null });
+      const jm = Math.hypot(jv.x, jv.y);
+      drawChar(c, pv.width / 2, pv.height / 2, s, me.c, { hat: hatBy, face: P.scene === 'end' || lastOx === 'right' ? 'laugh' : lastOx === 'fell' ? 'shock' : 'smile', cheer: P.scene === 'end' || lastOx === 'right', walk: jm, dir: jm > 0.15 ? Math.atan2(jv.y, jv.x) : null, bob: jm > 0.15 ? 0 : -Math.abs(Math.sin(t * 3)) * s * 0.15, team: P.gid === 'terr' && P.scene === 'game' && me.tm != null ? me.tm : null });
     }
     if (P.scene === 'lobby') { B = '입장 완료!'; U = '교실 화면에서 내 캐릭터를 찾아보세요'; }
     else if (P.scene === 'map') { B = '다음 여행지는?'; U = '선생님이 지도를 보고 있어요'; }
@@ -171,8 +252,8 @@ async function startPlayer(code) {
         else if (my[2] === 'fin') { B = `골인! ${my[3]}등`; cls = 'green'; }
         else if (P.ph === 'play') { if (st.it === 'look') { B = '멈춰!!'; U = '손을 떼요'; cls = 'red'; } else { B = '지금이야!'; U = '오른쪽으로 밀어요'; cls = 'green'; } }
         else { B = `${P.round}판 끝`; U = '다음 판을 기다려요'; }
-      } else if (P.gid === 'maze') { if (my && my[2] === 'fin') { B = `보물 발견! ${my[3]}등`; cls = 'green'; } else { U = `출구는 오른쪽 끝 · 남은 ${Math.ceil(st.left || 0)}초`; } }
-      else if (P.gid === 'terr') { if (my) { const fx = []; if (my[3] > 0) fx.push(`⚡ 번개 ${my[3]}초`); if (my[4] > 0) fx.push(`🛡 방패 ${my[4]}초`); if (my[5] > 0) fx.push(`❄ 느려짐 ${my[5]}초`); const T = TEAM[my[2]]; U = `${T.s} ${T.n}팀 ${(st.pc || [])[my[2]] || 0}% · 남은 ${Math.ceil(st.left || 0)}초` + (fx.length ? ' · ' + fx.join(' ') : ''); } }
+      } else if (P.gid === 'maze') { if (my && my[2] === 'fin') { B = `보물 발견! ${my[3]}등`; cls = 'green'; } else { U = `출구는 오른쪽 끝${(st.cr || []).length ? ' · 게 조심' : ''} · 남은 ${Math.ceil(st.left || 0)}초`; } }
+      else if (P.gid === 'terr') { if (my) { const fx = []; if (my[3] > 0) fx.push(`⚡ 번개 ${my[3]}초`); if (my[4] > 0) fx.push(`🛡 방패 ${my[4]}초`); if (my[5] > 0) fx.push(`❄ 느려짐 ${my[5]}초`); const T = TEAM[my[2]], stars = (st.lm || []).filter(o => o === my[2]).length; U = `${T.s} ${T.n}팀 ${(st.pc || [])[my[2]] || 0}%${stars ? ' ★' + stars : ''} · 남은 ${Math.ceil(st.left || 0)}초` + (fx.length ? ' · ' + fx.join(' ') : ''); } }
       else if (P.gid === 'worm') { const ws = st.w || {}, mw = ws[uid]; if (mw) { if (mw[1]) { B = '흩어졌어요!'; U = '2초 뒤 다시 출발'; } else { const rank = 1 + Object.keys(ws).filter(i => ws[i][0] > mw[0]).length; U = `길이 ${mw[0]} · ${rank}등 · 남은 ${Math.ceil(st.left || 0)}초`; } } }
       if (P.paused) { B = '잠깐 멈춤'; U = ''; }
     }

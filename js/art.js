@@ -70,17 +70,20 @@ const ART = (function () {
     c.save(); c.translate(o.x, o.y); c.scale(s, s); T.f(c, h, o.v); c.restore();
   }
   // 틀린 곳 고르기: 서로 떨어진 물건 n개에 변형을 하나씩
-  function makeDiffs(sceneKey, n, seed) {
+  function makeDiffs(sceneKey, n, seed, lv) {
     const sc = SCENES[sceneKey], r = Sim.rng(seed);
     const objs = sc.objs.map(([t, x, y, s, h, m, v]) => ({ t, x, y, s, h, m, v, mut: null }));
     const cand = objs.filter(o => o.m).sort(() => r() - 0.5), picked = [];
     for (const o of cand) {
       if (picked.length >= n) break;
       if (picked.some(p => Math.hypot(p.x - o.x, p.y - o.y) < 170)) continue;
-      const kinds = ['big', 'gone']; if (!NOCOLOR[o.t]) kinds.push('color', 'color'); if (OBJ[o.t].r * o.s < 70) kinds.push('big'); else kinds.push('small');
+      // 하: 크게 바뀌거나 사라짐 위주, 상: 색·작아짐 같은 눈에 덜 띄는 변화도 섞인다
+      const kinds = lv === 1 ? ['big', 'gone', 'gone'] : ['big', 'gone']; if (!NOCOLOR[o.t] && lv !== 1) kinds.push('color', 'color'); if (OBJ[o.t].r * o.s < 70) kinds.push('big'); else kinds.push('small');
+      if (lv === 3 && !NOCOLOR[o.t]) kinds.push('color', 'small');
       o.mut = kinds[(r() * kinds.length) | 0]; picked.push(o);
     }
-    const spots = picked.map(o => ({ x: o.x, y: o.y, r: Math.max(48, OBJ[o.t].r * o.s * (o.mut === 'big' ? 1.4 : 1) + 10) }));
+    const rk = lv === 1 ? 1.25 : lv === 3 ? 0.88 : 1;
+    const spots = picked.map(o => ({ x: o.x, y: o.y, r: Math.max(44, (OBJ[o.t].r * o.s * (o.mut === 'big' ? 1.4 : 1) + 10) * rk) }));
     return { objs, spots };
   }
   function renderScene(c, sceneKey, objs, withMut) {

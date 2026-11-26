@@ -20,7 +20,7 @@ input[type=text], input[type=password], input[type=number], textarea, select { f
 body.host { background: #111; overflow: hidden; }
 body.host #app { padding: 0; height: 100%; }
 #cv { display: block; }
-#qr { position: fixed; transform-origin: top left; width: 360px; background: #fff; border: 6px solid #2b2118; border-radius: 28px; padding: 18px; text-align: center; }
+#qr { position: fixed; z-index: 5; transform-origin: top left; width: 360px; background: #fff; border: 6px solid #2b2118; border-radius: 28px; padding: 18px; text-align: center; }
 .qrimg { width: 300px; min-height: 300px; margin: 0 auto; display: flex; align-items: center; justify-content: center; font-size: 22px; }
 .qrimg img, .qrimg canvas { width: 300px; height: 300px; }
 .qrcode { font-size: 86px; letter-spacing: 8px; line-height: 1.1; color: #ff5a5f; }
@@ -105,3 +105,76 @@ body.phone #app > .card { width: calc(100% - 32px); }
 .qform { display: flex; flex-direction: column; gap: 6px; }
 .pview { width: 100%; border: 3px solid #2b2118; border-radius: 12px; cursor: crosshair; }
 .pwork { display: flex; flex-direction: column; gap: 8px; }
+
+/* 두더지 구멍 판 (중·상) */
+#pask.holes { background: linear-gradient(#8fd46a, #6dbb4c); justify-content: flex-start; }
+.hgrid { flex: 1; display: grid; gap: 10px; align-content: center; }
+.hole { font: inherit; position: relative; aspect-ratio: 1.25; border: 0; background: radial-gradient(ellipse 50% 32% at 50% 62%, #3a2010 0 92%, transparent 95%), radial-gradient(ellipse 58% 40% at 50% 64%, #a5672f 0 92%, transparent 95%); cursor: pointer; touch-action: none; }
+.hole b { position: absolute; left: 6px; top: 4px; font-weight: 400; font-size: 22px; color: #fff; text-shadow: 0 2px 0 #2b2118, 0 0 4px #2b2118; }
+.hole i { position: absolute; left: 50%; top: 10%; width: 46%; height: 50%; margin-left: -23%; background: no-repeat center/contain; opacity: 0; }
+.hole.bonk i { animation: bonk .35s ease-out; }
+.hole.bonk::after { content: '🔨'; position: absolute; left: 50%; top: 18%; font-size: 40px; transform-origin: 80% 80%; animation: hammer .3s ease-out forwards; }
+@keyframes hammer { from { transform: translateX(-30%) rotate(-50deg); opacity: 1; } 60% { transform: translateX(-30%) rotate(15deg); opacity: 1; } to { transform: translateX(-30%) rotate(0); opacity: 0; } }
+/* 난이도 표시 */
+.lvb { font-size: 13px; padding: 2px 8px; border-radius: 10px; color: #fff; margin-left: 4px; }
+.lvrow { display: flex; gap: 6px; align-items: center; font-size: 16px; }
+.lvbtn { font: inherit; flex: 1; font-size: 16px; padding: 8px 4px; border: 3px solid #2b2118; border-radius: 12px; background: #fff; cursor: pointer; }
+.lvbtn.on { color: #fff; box-shadow: inset 0 -4px 0 rgba(0,0,0,.25); }
+.lvbtn.lv1.on { background: #27b56a; } .lvbtn.lv2.on { background: #f5a301; } .lvbtn.lv3.on { background: #e63946; }
+
+/* 체육 OX 서바이벌 3D */
+#ox3box { position: fixed; z-index: 0; pointer-events: none; }
+#ox3box #ox3d, #pmid #ox3d { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+body.host #cv { position: relative; z-index: 1; }
+/* 체육 OX 서바이벌 — 폰 화면 (원본 index.html의 모양을 그대로) */
+body.ox3 #pmid { position: relative; }
+body.ox3 #pv, body.ox3 #pmsg { display: none; }
+body.ox3.oxres #pmsg { display: flex; position: relative; z-index: 8; }
+body.ox3 #pjoy { position: fixed; left: 0; bottom: 0; width: 62vw; height: 42vh; background: none; border: 0; z-index: 6; }
+body.ox3 #pjoy .jhint { display: none; }
+body.ox3 #pbase { left: 87px; top: calc(100% - 93px); background: rgba(255,255,255,.35); border: 3px solid rgba(255,255,255,.8); }
+body.ox3 #pknob { width: 58px; height: 58px; margin: -29px 0 0 -29px; background: #fff; border: 4px solid #1d2433; box-shadow: 0 3px 0 #1d2433; }
+#oxui { --ink:#1d2433; --yellow:#ffd23f; --green:#2fbf71; --red:#ef4b4b; position: absolute; inset: 0; pointer-events: none; font-family: "Noto Sans KR", Jua, sans-serif; color: var(--ink); z-index: 7; }
+#oxui > * { pointer-events: auto; }
+#oxui .hidden { display: none !important; }
+#oxui #topbar { position: absolute; top: 8px; left: 8px; right: 8px; display: flex; gap: 6px; align-items: center; pointer-events: none; }
+#oxui #topbar > * { pointer-events: auto; } #oxui #topbar .sp { flex: 1; }
+#oxui .chip { background: rgba(20,26,40,.82); color: #fff; border-radius: 999px; padding: 6px 10px; font-weight: 700; font-size: 12px; border: none; font-family: inherit; white-space: nowrap; }
+#oxui #qbar { position: absolute; top: 46px; left: 50%; transform: translateX(-50%); width: min(560px, calc(100% - 20px)); background: #fff; border: 3px solid var(--ink); border-radius: 16px; box-shadow: 0 4px 0 var(--ink); padding: 10px 12px; display: flex; align-items: center; gap: 10px; }
+#oxui #qnum { background: var(--yellow); border: 2px solid var(--ink); border-radius: 8px; font-weight: 900; padding: 2px 8px; font-size: 13px; white-space: nowrap; }
+#oxui #qtext { flex: 1; font-weight: 700; font-size: 15px; line-height: 1.35; }
+#oxui #qtimer { min-width: 40px; height: 40px; border-radius: 10px; background: var(--green); color: #fff; font-family: Jua; font-size: 22px; display: flex; align-items: center; justify-content: center; border: 2px solid var(--ink); }
+#oxui #qtimer.warn { background: var(--red); }
+#oxui #qhint { position: absolute; top: 112px; left: 50%; transform: translateX(-50%); font-size: 12px; font-weight: 700; background: rgba(255,255,255,.85); border-radius: 999px; padding: 3px 10px; white-space: nowrap; pointer-events: none; }
+#oxui #oxshirt { position: absolute; top: 142px; left: 50%; transform: translateX(-50%); background: #fff; border: 3px solid var(--ink); border-radius: 16px; padding: 8px 12px; text-align: center; font-size: 13px; }
+#oxui .swatches { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-top: 6px; }
+#oxui .swatches button { width: 30px; height: 30px; border-radius: 50%; border: 3px solid #fff; box-shadow: 0 0 0 2px #cfd4e2; }
+#oxui .swatches button.on { box-shadow: 0 0 0 3px var(--ink); }
+#oxui #ox3msg { position: absolute; top: 45%; left: 10%; right: 10%; text-align: center; background: rgba(255,255,255,.9); border-radius: 14px; padding: 12px; font-size: 15px; }
+#oxui #emojiBtn { position: absolute; right: 18px; bottom: 28px; width: 72px; height: 72px; border-radius: 50%; background: #fff; border: 4px solid var(--ink); box-shadow: 0 4px 0 var(--ink); font-size: 34px; z-index: 7; }
+#oxui #emojiPal { position: absolute; right: 12px; bottom: 112px; background: #fff; border: 3px solid var(--ink); border-radius: 16px; padding: 8px; display: grid; grid-template-columns: repeat(3, 48px); gap: 6px; z-index: 7; }
+#oxui #emojiPal button { font-size: 26px; height: 48px; border-radius: 12px; border: 2px solid #e3e6ee; background: #f7f8fb; }
+#oxui #reviveBtn { position: absolute; left: 50%; bottom: 150px; transform: translateX(-50%); z-index: 7; background: var(--yellow); border: 3px solid var(--ink); box-shadow: 0 4px 0 var(--ink); border-radius: 14px; padding: 12px 18px; font-weight: 900; font-size: 16px; font-family: inherit; white-space: nowrap; }
+#oxui #cheerTag { position: absolute; left: 50%; bottom: 214px; transform: translateX(-50%); background: rgba(20,26,40,.85); color: #fff; border-radius: 999px; padding: 6px 14px; font-weight: 700; font-size: 13px; white-space: nowrap; pointer-events: none; }
+#oxui #oxtoast { position: absolute; left: 50%; top: 42%; transform: translate(-50%,-50%) scale(.9); background: #fff; border: 3px solid var(--ink); border-radius: 18px; box-shadow: 0 5px 0 var(--ink); padding: 14px 20px; text-align: center; font-weight: 900; font-size: 20px; opacity: 0; transition: all .25s; pointer-events: none; max-width: 88%; z-index: 9; }
+#oxui #oxtoast.show { opacity: 1; transform: translate(-50%,-50%) scale(1); }
+#oxui #oxtoast small { display: block; font-weight: 500; font-size: 14px; margin-top: 6px; }
+#oxui .overlay { position: fixed; inset: 0; background: rgba(15,20,35,.55); display: flex; align-items: center; justify-content: center; z-index: 30; padding: 14px; }
+#oxui .modal { background: #f6f7fb; border: 3px solid var(--ink); border-radius: 20px; box-shadow: 0 6px 0 var(--ink); max-height: 92vh; display: flex; flex-direction: column; overflow: hidden; }
+#oxui .mhead { background: var(--ink); color: #fff; padding: 12px 16px; display: flex; align-items: center; gap: 10px; font-weight: 900; } #oxui .mhead .sp { flex: 1; }
+#oxui .mbody { padding: 14px 16px; overflow: auto; }
+#oxui .big { font-family: Jua; font-size: 30px; }
+#oxui .muted { color: #667; font-size: 13px; }
+#oxui .btn { border: 3px solid var(--ink); border-radius: 12px; padding: 10px 14px; font-weight: 900; font-size: 15px; background: #fff; box-shadow: 0 3px 0 var(--ink); font-family: inherit; } #oxui .btn.y { background: var(--yellow); }
+#oxui .oxbtns { display: flex; gap: 12px; margin-top: 14px; }
+#oxui .oxbtns button { flex: 1; font-size: 42px; padding: 16px 0; border: 3px solid var(--ink); border-radius: 16px; box-shadow: 0 4px 0 var(--ink); font-family: Jua; }
+
+/* 전광판 + 노트북 조종판 */
+#ctlhelp { position: fixed; right: 14px; top: 14px; width: 340px; background: #fff; border: 4px solid #2b2118; border-radius: 20px; padding: 12px; z-index: 21; display: flex; flex-direction: column; gap: 8px; font-size: 15px; }
+#ctlhelp b { font-weight: 400; color: #e63946; font-size: 17px; }
+.cset { width: 100%; background: #fff; border: 2px dashed #b9b2a6; border-radius: 16px; padding: 10px 12px; margin: 6px 0 14px; }
+.cset summary { cursor: pointer; color: #7a6f60; font-size: 15px; }
+.cset[open] { display: flex; flex-direction: column; gap: 8px; }
+.ctlqr { align-self: center; background: #fff; padding: 8px; }
+.ctlqr img, .ctlqr canvas { display: block; }
+.b.big { font-size: 22px; padding: 14px 18px; }

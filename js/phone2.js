@@ -1,5 +1,5 @@
 /* 학생 폰: 터치·퀴즈·그림 게임의 입력 화면. 교실 화면이 보낸 ask(무엇을 입력받을지)에 따라 그린다. */
-const TAP_THEME = { mole: '#000', beat: '#0f1a3a', rocket: '#101632', ten: '#000' };
+const TAP_THEME = { mole: '#000', beat: '#0f1a3a', ten: '#000' };
 
 function ripple(root, e) {
   const r = root.getBoundingClientRect(), d = el('div', { class: 'ripple' });
@@ -22,6 +22,16 @@ function renderAsk(root, a, env) {
       env.send({ k: 'tap' }); ripple(root, e); if (navigator.vibrate) navigator.vibrate(20);
       if (a.once) hint.textContent = '눌렀어요! 결과를 기다려요';
     };
+    return;
+  }
+  if (a.type === 'holes') {   // 두더지 중·상: 큰 화면과 같은 구멍을 탭
+    root.className = 'ask holes';
+    const btns = Array.from({ length: a.cols * a.rows }, (_, k) => {
+      const b = el('button', { class: 'hole' }, [el('i'), el('b', { text: String(k + 1) })]);
+      b.onpointerdown = e => { e.preventDefault(); if (a.closed) return; env.send({ k: 'tap', h: k }); b.classList.remove('bonk'); void b.offsetWidth; b.classList.add('bonk'); if (navigator.vibrate) navigator.vibrate(20); };
+      return b;
+    });
+    root.replaceChildren(el('div', { class: 'alab', text: a.label }), el('div', { class: 'hgrid', style: `grid-template-columns:repeat(${a.cols},1fr)` }, btns));
     return;
   }
   if (a.type === 'choice' || a.type === 'grid') {
