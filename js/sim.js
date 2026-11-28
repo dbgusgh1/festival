@@ -565,7 +565,7 @@
       this.lv = LV(opts.lv);
       this.dur = opts.dur || 90; this.collide = opts.collide !== false;
       this.r = rng(opts.seed || Date.now());
-      this.base = 8; this.gap = 13; this.speed = [0, 150, 175, 205][this.lv]; this.turn = 4.2;
+      this.base = 8; this.gap = 13; this.lives = opts.lives == null ? 5 : opts.lives;   // 부활 가능 횟수 this.speed = [0, 150, 175, 205][this.lv]; this.turn = 4.2;
       this.w = {}; this.pids = []; this.orbs = []; this.left = this.dur; this.ph = 'idle'; this.ev = [];
       this.mines = [];
       for (let k = 0; k < (this.collide ? [0, 0, 5, 10][this.lv] : 0); k++) this.mines.push({ x: 200 + this.r() * (MW - 400), y: 200 + this.r() * (MH - 400), r: 26 });
@@ -576,7 +576,7 @@
       for (let k = 0; k < 10; k++) { const o = { x: 40 + this.r() * (MW - 80), y: 40 + this.r() * (MH - 80), tmp: 0, big: this.r() < 0.08 ? 1 : 0 }; if (!this.mines || this.mines.every(m => Math.hypot(m.x - o.x, m.y - o.y) > 60)) return o; }
       return { x: 40 + this.r() * (MW - 80), y: 40, tmp: 0, big: 0 };
     }
-    add(id) { if (this.w[id]) return; this.pids.push(id); this.w[id] = { len: this.base, dead: 0, pts: [], x: 0, y: 0, a: 0, ta: 0 }; this.place(this.w[id]); }
+    add(id) { if (this.w[id]) return; this.pids.push(id); this.w[id] = { len: this.base, dead: 0, pts: [], x: 0, y: 0, a: 0, ta: 0, life: this.lives, out: 0 }; this.place(this.w[id]); }
     place(w) {
       let best = null, bd = -1;
       for (let k = 0; k < 14; k++) {
@@ -592,7 +592,8 @@
     start() { this.ph = 'play'; }
     kill(id, why) {
       const w = this.w[id];
-      this.ev.push({ t: 'die', id, why, x: w.x | 0, y: w.y | 0 });
+      if (w.life > 0) w.life--; else w.out = 1;   // 부활을 다 쓰면 탈락(길이 기록은 남는다)
+      this.ev.push({ t: 'die', id, why, x: w.x | 0, y: w.y | 0, life: w.life, out: w.out });
       for (let n = 0; n < w.pts.length; n += 2) this.orbs.push({ x: clamp(w.pts[n].x, 20, MW - 20), y: clamp(w.pts[n].y, 20, MH - 20), tmp: 1, big: 0 });
       this.ov = (this.ov || 0) + 1;
       w.dead = 2; w.pts = [];
@@ -600,8 +601,10 @@
     step(dt, inputs) {
       if (this.ph !== 'play') return;
       this.left -= dt;
+      if (this.pids.length && this.pids.every(id => this.w[id].out)) this.left = 0;
       for (const id of this.pids) {
         const w = this.w[id];
+        if (w.out) continue;
         if (w.dead > 0) { w.dead -= dt; if (w.dead <= 0) { this.place(w); this.ev.push({ t: 'respawn', id }); } continue; }
         const i = inp(inputs[id]);
         if (i.x || i.y) w.ta = Math.atan2(i.y, i.x);   // 손을 떼면 마지막 방향 유지
@@ -627,13 +630,13 @@
         const dead = [];
         // 지렁이마다 몸을 감싸는 상자를 먼저 구해 두고, 머리가 상자 밖이면 몸 마디를 하나하나 보지 않는다(사람이 많을 때 렉 방지)
         for (const id of this.pids) {
-          const o = this.w[id]; if (o.dead > 0 || !o.pts.length) { o.bb = null; continue; }
+          const o = this.w[id]; if (o.out || o.dead > 0 || !o.pts.length) { o.bb = null; continue; }
           let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
           for (const p of o.pts) { if (p.x < x0) x0 = p.x; if (p.x > x1) x1 = p.x; if (p.y < y0) y0 = p.y; if (p.y > y1) y1 = p.y; }
           o.bb = [x0 - 16, y0 - 16, x1 + 16, y1 + 16];
         }
         for (const id of this.pids) {
-          const w = this.w[id]; if (w.dead > 0) continue;
+          const w = this.w[id]; if (w.out || w.dead > 0) continue;
           if (this.mines.some(m => Math.hypot(m.x - w.x, m.y - w.y) < m.r + 8)) { dead.push([id, 'mine']); continue; }
           outer: for (const od of this.pids) {
             if (od === id) continue;
@@ -655,7 +658,7 @@
       for (const id of this.pids) {
         const w = this.w[id], pts = [];
         for (let n = 0; n < w.pts.length; n += 2) pts.push(w.pts[n].x | 0, w.pts[n].y | 0);
-        o[id] = [w.len, w.dead > 0 ? 1 : 0, pts];
+        o[id] = [w.len, w.out ? 2 : w.dead > 0 ? 1 : 0, pts, w.life];
       }
       const ob = []; for (const q of this.orbs) ob.push(q.x | 0, q.y | 0, q.big);
       const mn = []; for (const m of this.mines) mn.push(m.x | 0, m.y | 0);
@@ -668,7 +671,7 @@
         const w = this.w[id], pts = [], stp = Math.max(2, Math.ceil(w.pts.length / 40));
         for (let n = 0; n < w.pts.length; n += stp) pts.push(w.pts[n].x | 0, w.pts[n].y | 0);
         const tl = w.pts[w.pts.length - 1]; if (tl && (w.pts.length - 1) % stp) pts.push(tl.x | 0, tl.y | 0);
-        o[id] = [w.len, w.dead > 0 ? 1 : 0, pts];
+        o[id] = [w.len, w.out ? 2 : w.dead > 0 ? 1 : 0, pts, w.life];
       }
       const out = { w: o, ov: this.ov || 0, left: Math.max(0, +this.left.toFixed(1)), ph: this.ph };
       if (this.sentOv !== out.ov || !this.sentMn) {

@@ -105,7 +105,7 @@ async function startPlayer(code) {
     if (v.k === 'oxback' && ox && ox.ui) oxToast('💪 부활 성공!', '경기장으로 돌아왔어요');
     if (v.k === 'ox') lastOx = v.r; else if (v.k === 'res') lastRes = v; else if (v.k === 'end') { endInfo = v; showEnd(); }
     const TH = THEMES[S.pub.theme] || THEMES.city;
-    const T = { out: '삐익! 움직이다 걸렸어요', fin: `골인! ${v.rank}등`, cut: v.why === 'self' ? '내 선을 밟았어요! 기지에서 다시' : v.why === 'haz' ? TH.haz + '에 닿았어요! 기지에서 다시' : '선이 끊겼어요! 기지에서 다시 출발', block: '방패가 막아 줬어요!', slowed: '눈송이에 맞아 느려졌어요', die: v.why === 'mine' ? '가시에 찔렸어요! 2초 뒤 다시' : '흩어졌어요! 2초 뒤 다시 출발', crab: '집게! 출발점으로 돌아가요', warp: '🌀 순간 이동!', item: v.it ? ITEM_ICON[v.it][0] + ' ' + ITEM_ICON[v.it][2] + ' 획득!' : '' }[v.k];
+    const T = { out: '삐익! 움직이다 걸렸어요', fin: `골인! ${v.rank}등`, cut: v.why === 'self' ? '내 선을 밟았어요! 기지에서 다시' : v.why === 'haz' ? TH.haz + '에 닿았어요! 기지에서 다시' : '선이 끊겼어요! 기지에서 다시 출발', block: '방패가 막아 줬어요!', slowed: '눈송이에 맞아 느려졌어요', die: v.out ? '😵 부활 5번을 다 썼어요! 탈락' : (v.why === 'mine' ? '가시에 찔렸어요! 2초 뒤 다시' : '흩어졌어요! 2초 뒤 다시 출발') + (v.life != null ? ` · 남은 부활 ${v.life}번` : ''), crab: '집게! 출발점으로 돌아가요', warp: '🌀 순간 이동!', item: v.it ? ITEM_ICON[v.it][0] + ' ' + ITEM_ICON[v.it][2] + ' 획득!' : '' }[v.k];
     if (T && Net.now() - v.ts < 4000) { toast.textContent = T; toast.className = 'on'; toastT = performance.now(); if (navigator.vibrate) navigator.vibrate(60); }
   });
 
@@ -221,7 +221,7 @@ async function startPlayer(code) {
     const ptxt = P.scene === 'game' || P.scene === 'fly' ? (g ? g.icon + ' ' + g.place : '') : P.scene === 'end' ? '🏫 교실' : '', pk = ptxt + (P.lv || '') + P.scene;
     if (place.dataset.k !== pk) { place.dataset.k = pk; place.replaceChildren(ptxt, (P.scene === 'game' || P.scene === 'fly') && P.lv ? el('span', { class: 'lvb', style: 'background:' + LVCOL[P.lv], text: LVNAME[P.lv] }) : ''); }
     let B = '', U = '', cls = '';
-    const view = P.scene === 'game' && VIEW[P.gid] && S.st && P.ph !== 'intro';
+    const view = P.scene === 'game' && VIEW[P.gid] && S.st && (P.ph !== 'intro' || P.gid === 'worm');   // 사탕 나라는 출발 전에도 내 위치를 보여 준다
     if (view) {
       let mx = cam.x, my = cam.y;
       if (P.gid === 'worm') { const wm = st.w && st.w[uid]; if (wm && wm[2].length) { mx = wm[2][0]; my = wm[2][1]; } } else if (st.p && st.p[uid]) { mx = st.p[uid][0]; my = st.p[uid][1]; }
@@ -230,6 +230,17 @@ async function startPlayer(code) {
       c.fillStyle = P.gid === 'maze' ? '#1e7fd6' : P.gid === 'worm' ? '#ff8fc7' : '#222'; c.fillRect(0, 0, pv.width, pv.height);
       c.setTransform(sc, 0, 0, sc, pv.width / 2 - cam.x * sc, pv.height / 2 - cam.y * sc);
       if (P.gid === 'maze') drawMaze(c, S); else if (P.gid === 'terr') drawTerr(c, S); else drawWorm(c, S);
+      if (P.gid === 'worm') {   // 내 지렁이 표시: 출발 전·다시 나타난 직후에는 크게 깜빡이는 동그라미, 오른쪽 위에는 전체 지도
+        const ws = st.w || {}, mw = ws[uid];
+        if (mw) { if (S.wDead && !mw[1]) S.wRing = t + 2.5; S.wDead = !!mw[1]; }
+        const ring = mw && !mw[1] && mw[2].length && (P.ph === 'intro' || P.ph === 'count' || t < (S.wRing || 0));
+        if (ring) { const r = 70 + Math.sin(t * 8) * 12; c.lineWidth = 8; c.strokeStyle = '#fff'; c.beginPath(); c.arc(mw[2][0], mw[2][1], r, 0, 7); c.stroke(); c.lineWidth = 5; c.strokeStyle = '#e63946'; c.stroke(); txt(c, '▼ 여기가 나!', mw[2][0], mw[2][1] - r - 26, 30, '#e63946', 'center', '#fff'); }
+        const MW = 2400, MH = 1350, mwid = pv.width * 0.36, mhei = mwid * MH / MW, ox = pv.width - mwid - 8 * dpr, oy = 8 * dpr, k = mwid / MW;
+        c.setTransform(1, 0, 0, 1, 0, 0); c.fillStyle = 'rgba(255,240,248,.92)'; c.fillRect(ox, oy, mwid, mhei); c.lineWidth = 2 * dpr; c.strokeStyle = '#e6398b'; c.strokeRect(ox, oy, mwid, mhei);
+        for (const id in ws) { const w = ws[id]; if (id === uid || w[1] || !w[2].length) continue; c.fillStyle = 'rgba(80,60,90,.55)'; c.beginPath(); c.arc(ox + w[2][0] * k, oy + w[2][1] * k, 2.2 * dpr, 0, 7); c.fill(); }
+        if (mw && !mw[1] && mw[2].length) { const bl = Math.floor(t * 4) % 2 || !ring; c.fillStyle = bl ? '#e63946' : '#fff'; c.strokeStyle = '#fff'; c.lineWidth = 2 * dpr; c.beginPath(); c.arc(ox + mw[2][0] * k, oy + mw[2][1] * k, 5 * dpr, 0, 7); c.fill(); c.stroke(); }
+        c.strokeStyle = '#ffd400'; c.lineWidth = 1.5 * dpr; c.strokeRect(ox + (cam.x - VIEW.worm / 2) * k, oy + (cam.y - pv.height / sc / 2) * k, VIEW.worm * k, pv.height / sc * k);
+      }
       if (P.gid === 'terr' && S.board) {   // 작은 전체 지도: 내 위치와 우리 팀 땅
         const mw = pv.width * 0.34, mh = mw * Sim.Terr.TH / Sim.Terr.TW, mx = pv.width - mw - 8 * dpr, my = 8 * dpr;
         c.setTransform(1, 0, 0, 1, 0, 0); c.globalAlpha = 0.92; c.drawImage(S.board, mx, my, mw, mh); c.globalAlpha = 1;
@@ -271,7 +282,7 @@ async function startPlayer(code) {
         else { B = `${P.round}판 끝`; U = '다음 판을 기다려요'; }
       } else if (P.gid === 'maze') { if (my && my[2] === 'fin') { B = `보물 발견! ${my[3]}등`; cls = 'green'; } else { U = `출구는 오른쪽 끝${(st.cr || []).length ? ' · 게 조심' : ''} · 남은 ${Math.ceil(st.left || 0)}초`; } }
       else if (P.gid === 'terr') { if (my) { const fx = []; if (my[3] > 0) fx.push(`⚡ 번개 ${my[3]}초`); if (my[4] > 0) fx.push(`🛡 방패 ${my[4]}초`); if (my[5] > 0) fx.push(`❄ 느려짐 ${my[5]}초`); const T = TEAM[my[2]], stars = (st.lm || []).filter(o => o === my[2]).length; U = `${T.s} ${T.n}팀 ${(st.pc || [])[my[2]] || 0}%${stars ? ' ★' + stars : ''} · 남은 ${Math.ceil(st.left || 0)}초` + (fx.length ? ' · ' + fx.join(' ') : ''); } }
-      else if (P.gid === 'worm') { const ws = st.w || {}, mw = ws[uid]; if (mw) { if (mw[1]) { B = '흩어졌어요!'; U = '2초 뒤 다시 출발'; } else { const rank = 1 + Object.keys(ws).filter(i => ws[i][0] > mw[0]).length; U = `길이 ${mw[0]} · ${rank}등 · 남은 ${Math.ceil(st.left || 0)}초`; } } }
+      else if (P.gid === 'worm') { const ws = st.w || {}, mw = ws[uid]; if (mw) { const lf = mw[3] != null ? mw[3] : 5; if (mw[1] === 2) { B = '탈락!'; U = '부활 5번을 다 썼어요 · 큰 화면에서 친구들을 응원해요'; cls = 'red'; } else if (mw[1]) { B = '흩어졌어요!'; U = `2초 뒤 다시 출발 · 남은 부활 ${lf}번`; } else if (P.ph === 'intro' || P.ph === 'count') { B = '빨간 동그라미가 내 지렁이!'; U = '오른쪽 위 작은 지도에서 내 위치를 확인해요'; } else { const rank = 1 + Object.keys(ws).filter(i => ws[i][0] > mw[0]).length; U = `길이 ${mw[0]} · ${rank}등 · ❤ 부활 ${lf}번 · 남은 ${Math.ceil(st.left || 0)}초`; } } }
       if (P.paused) { B = '잠깐 멈춤'; U = ''; }
     }
     if (big.textContent !== B) big.textContent = B; if (sub.textContent !== U) sub.textContent = U;

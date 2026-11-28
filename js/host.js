@@ -308,7 +308,7 @@ async function startHost(code) {
         else if (e.t === 'warp') { FX.ring(...terrToScreen(e.x, e.y), '#b26bff', 40); tell(e.id, { k: 'warp' }); }
         else if (e.t === 'cap' && e.n >= 6) { FX.pop(terrToScreen(e.x, e.y)[0], terrToScreen(e.x, e.y)[1] - 26, '+' + e.n + '칸', TEAM[sim.p[e.id].tm].d, Math.min(52, 24 + e.n / 6)); if (e.n >= 40) { FX.burst(...terrToScreen(e.x, e.y), 20, [TEAM[sim.p[e.id].tm].c, '#fff', '#ffd400']); beep(990, 0.1); } }
       }
-      else if (gid === 'worm') { if (e.t === 'die') { stat(e.id, 'die'); tell(e.id, { k: 'die', why: e.why }); FX.burst(e.x * W3, e.y * W3, 18); } else if (e.t === 'big') FX.pop(e.x * W3, e.y * W3 - 20, '+4', '#e6398b', 30); }
+      else if (gid === 'worm') { if (e.t === 'die') { stat(e.id, 'die'); tell(e.id, { k: 'die', why: e.why, life: e.life, out: e.out }); if (e.out) FX.pop(e.x * W3, e.y * W3 - 30, nameOf(S.players[e.id]) + ' 탈락', '#e63946', 30); FX.burst(e.x * W3, e.y * W3, 18); } else if (e.t === 'big') FX.pop(e.x * W3, e.y * W3 - 20, '+4', '#e6398b', 30); }
       else if (gid === 'ox' && e.t === 'bump') { FX.ring(e.x, e.y, '#fff', 40); }
     });
     if (gid === 'ox') {
