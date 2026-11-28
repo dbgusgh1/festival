@@ -646,7 +646,10 @@ function wormBack() {
 /* 지렁이 부드럽게: 폰은 1초에 8번 위치를 받는다. 받을 때마다 몸이 툭 옮겨지면 어지러우므로,
    지금 보이는 머리 자리에서 새로 받은 몸길(자기 꼬리 자국)을 따라 다음 소식이 올 때까지 일정한 속도로 미끄러지게 그린다.
    wormSync(S)는 장면마다 한 번 부르면 되고(같은 장면에서 여러 번 불러도 같은 결과), S.wsm[id] = { path, hx, hy, dir }를 만든다. */
+/* Firebase는 빈 목록([])을 지우고 중간이 빈 목록을 객체로 바꾼다 → 지렁이 자료를 늘 [길이, 상태, 몸좌표[], 부활] 모양으로 맞춘다 */
+function wormFix(v) { if (!v || !v.w) return; for (const id in v.w) { let a = v.w[id]; if (!a) { delete v.w[id]; continue; } if (Array.isArray(a) && Array.isArray(a[2])) continue; if (!Array.isArray(a)) a = [a[0], a[1], a[2], a[3]]; if (!Array.isArray(a[2])) a[2] = a[2] ? Object.values(a[2]) : []; a[0] = a[0] || 0; a[1] = a[1] || 0; v.w[id] = a; } }
 function wormSync(S) {
+  wormFix(S.st);
   const st = S.st || {}, ws = st.w || {}, now = performance.now(), M = (S.wsm = S.wsm || {});
   for (const id in M) if (!ws[id] || ws[id][1]) delete M[id];
   for (const id in ws) {
@@ -697,7 +700,7 @@ function drawWorm(c, S) {
   }
   const ws = st.w || {};
   Object.keys(ws).forEach(id => {
-    const [len, dead, raw] = ws[id], pl = S.players[id]; if (!pl || dead || raw.length < 2) return;
+    const [len, dead, raw] = ws[id], pl = S.players[id]; if (!pl || dead || !raw || raw.length < 2) return;
     const sm = WS[id], pts = sm && sm.path && sm.path.length >= 4 ? sm.path : raw;
     const [body, line] = charCol(pl.c);
     c.lineCap = 'round'; c.lineJoin = 'round';

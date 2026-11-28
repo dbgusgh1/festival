@@ -97,7 +97,7 @@ async function startPlayer(code) {
 
   Net.on(base + '/pub', v => { const prev = S.pub; S.pub = v || {}; if (prev.gid !== S.pub.gid || prev.scene !== S.pub.scene) { S.disp = {}; S.fallT = {}; lastOx = null; if (S.pub.ph !== 'result') lastRes = null; lastMsg = null; } if (S.pub.ph === 'play' && S.pub.gid === 'ox') lastOx = null; if (S.pub.scene === 'end') showEnd(); });
   // 지렁이: 사탕·가시가 안 바뀌면 빠진 채로 온다 → 앞에 받은 것을 그대로 쓴다
-  Net.on(base + '/st', v => { if (v && v.w && S.st && S.st.w) { if (!v.ob && S.st.ob) v.ob = S.st.ob; if (!v.mn && S.st.mn) v.mn = S.st.mn; } S.st = v; });
+  Net.on(base + '/st', v => { wormFix(v); if (v && v.w && S.st && S.st.w) { if (!v.ob && S.st.ob) v.ob = S.st.ob; if (!v.mn && S.st.mn) v.mn = S.st.mn; } S.st = v; });
   Net.on(base + '/grid', v => (S.grid = v));
   Net.on(base + '/img', v => { S.img = v; if (env.diff) env.diff.setImg(v); });
   Net.on(base + '/players', v => { S.players = v || {}; const m = S.players[uid]; if (m) me = m; else if (joined) { joined = false; app.replaceChildren(el('div', { class: 'card' }, [el('div', { class: 'big', text: '방에서 나왔어요' }), navLink('다시 들어가기', '?r=' + code, 'b pri')])); } });
@@ -199,7 +199,9 @@ async function startPlayer(code) {
   }
 
   const VIEW = { maze: 300, terr: 560, worm: 720 };
-  function frame(ms) {
+  let frameErr = 0;
+  function frame(ms) { try { frameBody(ms); } catch (e) { console.error(e); if (!frameErr++) setTimeout(() => { throw e; }); requestAnimationFrame(frame); } }
+  function frameBody(ms) {
     S.t = ms / 1000; const P = S.pub, g = GAMES[P.gid], st = S.st || {}, t = S.t;
     const w = pv.clientWidth, hgt = pv.clientHeight, dpr = Math.min(2, devicePixelRatio || 1);
     if (pv.width !== Math.round(w * dpr) || pv.height !== Math.round(hgt * dpr)) { pv.width = Math.round(w * dpr); pv.height = Math.round(hgt * dpr); }
@@ -231,7 +233,7 @@ async function startPlayer(code) {
       let ck = 0.25;
       if (P.gid === 'worm') {   // 내 지렁이 머리(부드럽게 미끄러지는 자리)를 화면 가운데에 둔다 → 바닥이 뚝뚝 끊기지 않고 흘러간다
         const wm = st.w && st.w[uid], sm = wormSync(S)[uid];
-        if (sm && sm.path) { mx = sm.hx; my = sm.hy; ck = Math.hypot(mx - cam.x, my - cam.y) > 400 ? 1 : 0.45; } else if (wm && wm[2].length) { mx = wm[2][0]; my = wm[2][1]; }
+        if (sm && sm.path) { mx = sm.hx; my = sm.hy; ck = Math.hypot(mx - cam.x, my - cam.y) > 400 ? 1 : 0.45; } else if (wm && wm[2] && wm[2].length) { mx = wm[2][0]; my = wm[2][1]; }
       } else if (st.p && st.p[uid]) { mx = st.p[uid][0]; my = st.p[uid][1]; }
       cam.x += (mx - cam.x) * ck; cam.y += (my - cam.y) * ck;
       const sc = pv.width / VIEW[P.gid];
@@ -241,12 +243,12 @@ async function startPlayer(code) {
       if (P.gid === 'worm') {   // 내 지렁이 표시: 출발 전·다시 나타난 직후에는 크게 깜빡이는 동그라미, 오른쪽 위에는 전체 지도
         const ws = st.w || {}, mw = ws[uid];
         if (mw) { if (S.wDead && !mw[1]) S.wRing = t + 2.5; S.wDead = !!mw[1]; }
-        const ring = mw && !mw[1] && mw[2].length && (P.ph === 'intro' || P.ph === 'count' || t < (S.wRing || 0));
+        const ring = mw && !mw[1] && mw[2] && mw[2].length && (P.ph === 'intro' || P.ph === 'count' || t < (S.wRing || 0));
         if (ring) { const r = 70 + Math.sin(t * 8) * 12, hs = (S.wsm || {})[uid], hx = hs && hs.path ? hs.hx : mw[2][0], hy = hs && hs.path ? hs.hy : mw[2][1]; c.lineWidth = 8; c.strokeStyle = '#fff'; c.beginPath(); c.arc(hx, hy, r, 0, 7); c.stroke(); c.lineWidth = 5; c.strokeStyle = '#e63946'; c.stroke(); txt(c, '▼ 여기가 나!', hx, hy - r - 26, 30, '#e63946', 'center', '#fff'); }
         const MW = 2400, MH = 1350, mwid = pv.width * 0.36, mhei = mwid * MH / MW, ox = pv.width - mwid - 8 * dpr, oy = 8 * dpr, k = mwid / MW;
         c.setTransform(1, 0, 0, 1, 0, 0); c.fillStyle = 'rgba(255,240,248,.92)'; c.fillRect(ox, oy, mwid, mhei); c.lineWidth = 2 * dpr; c.strokeStyle = '#e6398b'; c.strokeRect(ox, oy, mwid, mhei);
-        for (const id in ws) { const w = ws[id]; if (id === uid || w[1] || !w[2].length) continue; c.fillStyle = 'rgba(80,60,90,.55)'; c.beginPath(); c.arc(ox + w[2][0] * k, oy + w[2][1] * k, 2.2 * dpr, 0, 7); c.fill(); }
-        if (mw && !mw[1] && mw[2].length) { const bl = Math.floor(t * 4) % 2 || !ring; c.fillStyle = bl ? '#e63946' : '#fff'; c.strokeStyle = '#fff'; c.lineWidth = 2 * dpr; c.beginPath(); c.arc(ox + mw[2][0] * k, oy + mw[2][1] * k, 5 * dpr, 0, 7); c.fill(); c.stroke(); }
+        for (const id in ws) { const w = ws[id]; if (id === uid || w[1] || !w[2] || !w[2].length) continue; c.fillStyle = 'rgba(80,60,90,.55)'; c.beginPath(); c.arc(ox + w[2][0] * k, oy + w[2][1] * k, 2.2 * dpr, 0, 7); c.fill(); }
+        if (mw && !mw[1] && mw[2] && mw[2].length) { const bl = Math.floor(t * 4) % 2 || !ring; c.fillStyle = bl ? '#e63946' : '#fff'; c.strokeStyle = '#fff'; c.lineWidth = 2 * dpr; c.beginPath(); c.arc(ox + mw[2][0] * k, oy + mw[2][1] * k, 5 * dpr, 0, 7); c.fill(); c.stroke(); }
         c.strokeStyle = '#ffd400'; c.lineWidth = 1.5 * dpr; c.strokeRect(ox + (cam.x - VIEW.worm / 2) * k, oy + (cam.y - pv.height / sc / 2) * k, VIEW.worm * k, pv.height / sc * k);
       }
       if (P.gid === 'terr' && S.board) {   // 작은 전체 지도: 내 위치와 우리 팀 땅
