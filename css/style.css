@@ -178,5 +178,17 @@ body.ox3 #pknob { width: 58px; height: 58px; margin: -29px 0 0 -29px; background
 .ctlqr { align-self: center; background: #fff; padding: 8px; }
 .ctlqr img, .ctlqr canvas { display: block; }
 .b.big { font-size: 22px; padding: 14px 18px; }
-/* 게임 중 입장 QR(작게, 오른쪽 아래) */
-#qr.mini { z-index: 20; box-shadow: 0 10px 30px rgba(0,0,0,.35); }
+
+/* 중간 참가용 작은 QR (전광판) */
+#qrmini { position: fixed; z-index: 5; transform-origin: top left; width: 156px; background: #fff; border: 4px solid #2b2118; border-radius: 18px; padding: 8px 8px 6px; text-align: center; }
+#qrmini b { display: block; font-weight: 400; font-size: 15px; color: #e63946; margin-bottom: 4px; }
+.qmimg { width: 118px; min-height: 118px; margin: 0 auto; display: flex; align-items: center; justify-content: center; font-size: 12px; word-break: break-all; }
+.qmimg img, .qmimg canvas { width: 118px; height: 118px; }
+.qmcode { font-size: 21px; line-height: 1.1; color: #ff5a5f; letter-spacing: 2px; }
+/* 폰: 연결이 늦을 때 */
+#pnet { position: fixed; left: 8px; right: 8px; top: 52px; z-index: 30; background: #fff3c4; border: 3px solid #2b2118; border-radius: 14px; padding: 8px 10px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 15px; }
+#pnet span { flex: 1 1 100%; }
+#pnet.hidden { display: none; }
+/* 폰: 다시 들어오기 */
+.claim { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+.claim button { font-size: 16px; padding: 8px 12px; }

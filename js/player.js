@@ -47,12 +47,19 @@ async function startPlayer(code) {
   const uid = await Net.anon(), mine = base + '/players/' + uid;
   if (!(await Net.get(base + '/meta'))) { app.replaceChildren(el('div', { class: 'card' }, [el('div', { class: 'big', text: `${code}번 방을 찾을 수 없어요` }), el('div', { class: 'sub', text: '교실 화면의 방 번호를 다시 확인해 주세요.' }), navLink('처음으로', '?', 'b pri')])); return; }
   let me = await Net.get(mine);
-  if (!me || !me.n) me = await new Promise(res => {
-    const inp = el('input', { type: 'text', maxlength: 8, placeholder: '닉네임 (8자까지)' }), err = el('div', { class: 'err' });
-    inp.addEventListener('input', () => (err.textContent = ''));
-    const go = () => { const n = inp.value.trim(); if (!n) { err.textContent = '닉네임을 먼저 적어 주세요.'; return; } const m = { n }; Net.set(mine, m); res(m); };
-    app.replaceChildren(el('div', { class: 'card' }, [el('div', { class: 'big', text: '우리 반 게임 페스티벌' }), el('div', { class: 'sub', text: `${code}번 방에 들어가요` }), inp, err, el('button', { class: 'b pri', text: '입장', onclick: go })]));
-  });
+  if (!me || !me.n) {
+    // 다른 브라우저로 다시 들어온 친구: 나가 있는 캐릭터 중에서 내 캐릭터를 고르면 점수·기록을 이어 간다
+    const all = (await Net.get(base + '/players')) || {};
+    const away = Object.keys(all).filter(id => id !== uid && all[id] && all[id].n && all[id].c && !all[id].bot && all[id].on === false).sort((a, b) => (all[a].n > all[b].n ? 1 : -1));
+    me = await new Promise(res => {
+      const inp = el('input', { type: 'text', maxlength: 8, placeholder: '닉네임 (8자까지)' }), err = el('div', { class: 'err' });
+      inp.addEventListener('input', () => (err.textContent = ''));
+      const go = () => { const n = inp.value.trim(); if (!n) { err.textContent = '닉네임을 먼저 적어 주세요.'; return; } const m = { n }; Net.set(mine, m); res(m); };
+      const pick = id => { const o = all[id]; if (!confirm(`'${o.n}'(으)로 이어서 할까요?\n내 캐릭터가 맞을 때만 눌러 주세요.`)) return; const m = { n: o.n, c: o.c, claim: id }; Net.set(mine, m); res(m); };
+      const back = away.length ? el('div', { class: 'card' }, [el('div', { class: 'sub', text: '아까 들어왔다가 나갔나요? 내 이름을 누르면 점수 그대로 이어서 해요' }), el('div', { class: 'claim' }, away.map(id => el('button', { class: 'b', text: '↩ ' + all[id].n, onclick: () => pick(id) })))]) : null;
+      app.replaceChildren(...[el('div', { class: 'card' }, [el('div', { class: 'big', text: '우리 반 게임 페스티벌' }), el('div', { class: 'sub', text: `${code}번 방에 들어가요` }), inp, err, el('button', { class: 'b pri', text: '새로 입장', onclick: go })]), back].filter(Boolean));
+    });
+  }
   if (!me.c) {
     await cookieStage(app, '여행 친구가 들어 있는 포춘쿠키');
     me.c = 1 + ((Math.random() * 99999) | 0);
@@ -70,13 +77,21 @@ async function startPlayer(code) {
   const toast = el('div', { id: 'ptoast' }), knob = el('div', { id: 'pknob' }), jbase = el('div', { id: 'pbase' }, [knob]), joy = el('div', { id: 'pjoy' }, [jbase, el('div', { class: 'jhint', text: '여기를 밀어서 움직여요' })]);
   const nick = el('b', { text: me.n }), score = el('span', { text: '0점' }), place = el('div', { id: 'pplace' });
   const overlay = el('div', { id: 'pover', class: 'hidden' });
-  app.replaceChildren(el('div', { id: 'ptop' }, [nick, score, place]), el('div', { id: 'pmid' }, [pv, pask, msg]), joy, toast, overlay);
+  // 연결이 늦을 때(폰이 잠들었다 깨거나 와이파이가 흔들릴 때): 안내 + 다시 연결 + 처음부터 다시 들어가기(같은 캐릭터로 돌아온다)
+  const reEnter = el('a', { class: 'b link', href: appUrl('?r=' + code), text: '처음부터 다시 들어가기' }); if (window.GAS_BASE) reEnter.target = '_top';
+  const netBar = el('div', { id: 'pnet', class: 'hidden' }, [el('span', { text: '📶 교실 화면과 연결이 늦어요 · 다시 연결하는 중…' }), el('button', { class: 'b', text: '다시 연결', onclick: () => { Net.kick(); kickAt = performance.now(); } }), reEnter]);
+  app.replaceChildren(el('div', { id: 'ptop' }, [nick, score, place]), el('div', { id: 'pmid' }, [pv, pask, msg]), joy, toast, overlay, netBar);
+  let hbAt = performance.now(), conn = true, lostAt = 0, kickAt = 0;
+  Net.on(base + '/meta/hb', () => (hbAt = performance.now()));
+  Net.conn(v => { conn = v; if (!v) lostAt = performance.now(); });
+  const stale = () => document.visibilityState === 'visible' && (performance.now() - hbAt > 7000 || (!conn && performance.now() - lostAt > 2500));
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && performance.now() - hbAt > 5000) { Net.kick(); kickAt = performance.now(); } });
   const c = pv.getContext('2d');
   const S = { pub: {}, st: null, players: { [uid]: me }, grid: null, disp: {}, fallT: {}, born: {}, t: 0, me: uid, phone: true };
   let lastMsg = null, askKey = null, askClosed = null, env = { sel: {}, me: uid, send: e => Net.ev(base + '/ev/' + uid, Object.assign({ q: S.pub.ask && S.pub.ask.key, ct: Net.now(), n: Date.now() + Math.random() }, e)) };
   let lastOx = null, lastRes = null, endInfo = null, lastTs = 0, toastT = 0, cam = { x: 800, y: 450 }, endShown = false, joined = true;
 
-  Net.on(base + '/pub', v => { const prev = S.pub; S.pub = v || {}; if (prev.gid !== S.pub.gid || prev.scene !== S.pub.scene) { if (prev.gid !== S.pub.gid) S.st = null; askKey = null; S.disp = {}; S.fallT = {}; lastOx = null; if (S.pub.ph !== 'result') lastRes = null; lastMsg = null; } if (S.pub.ph === 'play' && S.pub.gid === 'ox') lastOx = null; if (S.pub.scene === 'end') showEnd(); });
+  Net.on(base + '/pub', v => { const prev = S.pub; S.pub = v || {}; if (prev.gid !== S.pub.gid || prev.scene !== S.pub.scene) { S.disp = {}; S.fallT = {}; lastOx = null; if (S.pub.ph !== 'result') lastRes = null; lastMsg = null; } if (S.pub.ph === 'play' && S.pub.gid === 'ox') lastOx = null; if (S.pub.scene === 'end') showEnd(); });
   // 지렁이: 사탕·가시가 안 바뀌면 빠진 채로 온다 → 앞에 받은 것을 그대로 쓴다
   Net.on(base + '/st', v => { if (v && v.w && S.st && S.st.w) { if (!v.ob && S.st.ob) v.ob = S.st.ob; if (!v.mn && S.st.mn) v.mn = S.st.mn; } S.st = v; });
   Net.on(base + '/grid', v => (S.grid = v));
@@ -180,13 +195,13 @@ async function startPlayer(code) {
   }
 
   const VIEW = { maze: 300, terr: 560, worm: 720 };
-  function frame(ms) { requestAnimationFrame(frame); try { frameBody(ms); } catch (err) { console.error('폰 화면 그리기 오류', err); } }
-  function frameBody(ms) {
+  function frame(ms) {
     S.t = ms / 1000; const P = S.pub, g = GAMES[P.gid], st = S.st || {}, t = S.t;
     const w = pv.clientWidth, hgt = pv.clientHeight, dpr = Math.min(2, devicePixelRatio || 1);
     if (pv.width !== Math.round(w * dpr) || pv.height !== Math.round(hgt * dpr)) { pv.width = Math.round(w * dpr); pv.height = Math.round(hgt * dpr); }
     c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, pv.width, pv.height);
     if (toastT && ms - toastT > 2200) { toast.className = ''; toastT = 0; }
+    const slow = stale(); netBar.classList.toggle('hidden', !slow); if (slow && performance.now() - kickAt > 12000) { Net.kick(); kickAt = performance.now(); }
     const isG = P.scene === 'game' && !!GAMEDEF[P.gid], askOn = isG && P.ask && !['intro', 'count', 'result'].includes(P.ph);
     const play = P.scene === 'game' && !isG && (P.ph === 'play' || P.ph === 'count');
     pv.classList.toggle('hidden', !!askOn); pask.classList.toggle('hidden', !askOn);
@@ -196,7 +211,8 @@ async function startPlayer(code) {
       env.teamColor = null;
       renderAsk(pask, P.ask, env); if (env.diff) env.diff.setImg(S.img);
     }
-    if (!askOn) askKey = null;
+    // 게임이 끝나 입력 화면이 닫히면 내용을 비운다 → 숨은 그림판이 뒤에서 계속 그려지며 폰이 느려지는 것을 막는다
+    if (!askOn) { if (askKey !== null || pask.firstChild) { pask.replaceChildren(); env.diff = null; } askKey = null; }
     if (env.diff && P.df) env.diff.setFixed(P.df.fixed);
     const oxOn = P.scene === 'game' && P.gid === 'ox';
     document.body.classList.toggle('ox3', oxOn); document.body.classList.toggle('oxres', oxOn && P.ph === 'result');
@@ -260,6 +276,7 @@ async function startPlayer(code) {
     }
     if (big.textContent !== B) big.textContent = B; if (sub.textContent !== U) sub.textContent = U;
     msg.className = cls + (view && !B ? ' slim' : '');
+    requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
 }

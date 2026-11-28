@@ -400,13 +400,18 @@ function drawMaze(c, S) {
     if (id === S.me) txt(c, '▼', d.x, d.y - L.T * 0.78, 18, '#e63946', 'center', '#fff');
   });
 }
+/* 교실 화면 미로: 위쪽 64px 띠에 시간·난이도·보물 찾은 순서를 두고, 미로는 그 아래에 줄여 그린다(가리는 것 없음) */
+const MAZE_BOX = { y: 64, s: (900 - 64) / 900, x: (1600 - 1600 * (900 - 64) / 900) / 2 };
 function hudMaze(c, S) {
   const st = S.st || {}, ps = st.p || {};
-  card(c, 671, 12, 258, 76, 20, 'rgba(255,255,255,.95)', 4, 5);
-  const sl = Math.ceil(st.left || 0); txt(c, st.ph === 'play' ? '남은 시간 ' + (sl >= 60 ? ((sl / 60) | 0) + '분 ' + String(sl % 60).padStart(2, '0') + '초' : sl + '초') : '보물섬 미로', 800, 50, 30, st.left <= 10 && st.ph === 'play' ? '#e63946' : '#222');
+  c.fillStyle = '#0f4c86'; c.fillRect(0, 0, 1600, 64);
+  txt(c, '🏝 보물섬 미로', 24, 33, 30, '#fff', 'left');
+  if (S.pub.lv) pill(c, '난이도 ' + LVNAME[S.pub.lv], 250, 32, 22, LVCOL[S.pub.lv], '#fff', 'left');
+  const sl = Math.ceil(st.left || 0), warn = st.left <= 10 && st.ph === 'play';
+  card(c, 1336, 6, 252, 52, 18, warn ? '#ffe3e3' : '#fff', 3, 3);
+  txt(c, st.ph === 'play' ? '남은 시간 ' + (sl >= 60 ? ((sl / 60) | 0) + '분 ' + String(sl % 60).padStart(2, '0') + '초' : sl + '초') : '준비', 1462, 33, 28, warn ? '#e63946' : '#222');
   const fin = Object.keys(ps).filter(id => ps[id][2] === 'fin').sort((a, b) => ps[a][3] - ps[b][3]).slice(0, 5);
-  if (fin.length) { card(c, 12, 12, 250, 40 + fin.length * 34, 16, 'rgba(255,255,255,.95)', 4, 5); txt(c, '보물 찾은 순서', 137, 34, 22, '#b5651d'); fin.forEach((id, k) => txt(c, `${ps[id][3]}등 ${nameOf(S.players[id])}`, 30, 68 + k * 34, 24, '#222', 'left')); }
-  if (S.pub.lv) pill(c, '난이도 ' + LVNAME[S.pub.lv], 943, 50, 22, LVCOL[S.pub.lv], '#fff', 'left');   // 출구(오른쪽 끝)를 가리지 않게 시간 옆에
+  txt(c, fin.length ? '🏆 ' + fin.map(id => `${ps[id][3]}등 ${nameOf(S.players[id])}`).join(' · ') : '오른쪽 끝 보물 상자를 찾아라!', 860, 33, 24, '#ffe27a');
 }
 
 /* ══════════ 13 땅따먹기 — 4가지 큰 맵 ══════════ */

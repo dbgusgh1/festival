@@ -187,6 +187,20 @@ body.ox3 #pknob { width: 58px; height: 58px; margin: -29px 0 0 -29px; background
 .ctlqr img, .ctlqr canvas { display: block; }
 .b.big { font-size: 22px; padding: 14px 18px; }
 
+/* 중간 참가용 작은 QR (전광판) */
+#qrmini { position: fixed; z-index: 5; transform-origin: top left; width: 156px; background: #fff; border: 4px solid #2b2118; border-radius: 18px; padding: 8px 8px 6px; text-align: center; }
+#qrmini b { display: block; font-weight: 400; font-size: 15px; color: #e63946; margin-bottom: 4px; }
+.qmimg { width: 118px; min-height: 118px; margin: 0 auto; display: flex; align-items: center; justify-content: center; font-size: 12px; word-break: break-all; }
+.qmimg img, .qmimg canvas { width: 118px; height: 118px; }
+.qmcode { font-size: 21px; line-height: 1.1; color: #ff5a5f; letter-spacing: 2px; }
+/* 폰: 연결이 늦을 때 */
+#pnet { position: fixed; left: 8px; right: 8px; top: 52px; z-index: 30; background: #fff3c4; border: 3px solid #2b2118; border-radius: 14px; padding: 8px 10px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 15px; }
+#pnet span { flex: 1 1 100%; }
+#pnet.hidden { display: none; }
+/* 폰: 다시 들어오기 */
+.claim { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+.claim button { font-size: 16px; padding: 8px 12px; }
+
 </style>
 </head>
 <body>
@@ -216,7 +230,7 @@ function el(tag, attrs, kids) {
 let QS = new URLSearchParams(window.GAS_QS != null ? window.GAS_QS : location.search);
 const APP_BASE = window.GAS_BASE || (location.origin + location.pathname);
 const appUrl = q => APP_BASE + q + (QS.has('demo') ? (q.includes('?') ? '&' : '?') + 'demo' : '');
-const APP_VER = 'v3.2';
+const APP_VER = 'v3.3';
 // 오류가 나면 빈 화면 대신 아래쪽 빨간 상자에 이유를 보여 준다 (화면을 찍어 보내면 바로 고칠 수 있게)
 function showErr(m) {
   try {
@@ -269,7 +283,10 @@ const Net = (function () {
       ev: (p, v) => db.ref(p).set(Object.assign(clean(v), { at: firebase.database.ServerValue.TIMESTAMP })).catch(e => console.warn('입력 실패', e.message)),
       get: p => db.ref(p).get().then(s => s.val()),
       on: (p, cb) => db.ref(p).on('value', s => cb(s.val())),
-      gone: (p, v) => db.ref(p).onDisconnect().set(v)
+      gone: (p, v) => db.ref(p).onDisconnect().set(v),
+      // 연결 상태(폰이 잠들었다 깨거나 와이파이가 바뀌면 잠깐 끊긴다)와 강제 재연결
+      conn: cb => db.ref('.info/connected').on('value', s => cb(!!s.val())),
+      kick: () => { try { firebase.database().goOffline(); setTimeout(() => firebase.database().goOnline(), 300); } catch (e) { } }
     };
   }
 
@@ -311,7 +328,10 @@ const Net = (function () {
     ev(p, v) { return this.set(p, Object.assign(clean(v), { at: Date.now() })); },
     get: async p => { await ready; return clean(read(p)); },
     on: (p, cb) => { subs.push({ p, cb }); ready.then(() => cb(clean(read(p)))); },
-    gone: () => {}
+    // 연습 모드: 창을 닫으면 '나감'을 다른 창에 알린다(실제 연결의 onDisconnect 흉내)
+    gone: (p, v) => addEventListener('pagehide', () => { v = clean(v); write(p, v); bc.postMessage({ t: 'set', p, v }); }),
+    conn: cb => cb(true),
+    kick: () => {}
   };
 })();
 
@@ -1734,13 +1754,18 @@ function drawMaze(c, S) {
     if (id === S.me) txt(c, '▼', d.x, d.y - L.T * 0.78, 18, '#e63946', 'center', '#fff');
   });
 }
+/* 교실 화면 미로: 위쪽 64px 띠에 시간·난이도·보물 찾은 순서를 두고, 미로는 그 아래에 줄여 그린다(가리는 것 없음) */
+const MAZE_BOX = { y: 64, s: (900 - 64) / 900, x: (1600 - 1600 * (900 - 64) / 900) / 2 };
 function hudMaze(c, S) {
   const st = S.st || {}, ps = st.p || {};
-  card(c, 1330, 12, 258, 76, 20, 'rgba(255,255,255,.95)', 4, 5);
-  const sl = Math.ceil(st.left || 0); txt(c, st.ph === 'play' ? '남은 시간 ' + (sl >= 60 ? ((sl / 60) | 0) + '분 ' + String(sl % 60).padStart(2, '0') + '초' : sl + '초') : '보물섬 미로', 1459, 50, 30, st.left <= 10 && st.ph === 'play' ? '#e63946' : '#222');
+  c.fillStyle = '#0f4c86'; c.fillRect(0, 0, 1600, 64);
+  txt(c, '🏝 보물섬 미로', 24, 33, 30, '#fff', 'left');
+  if (S.pub.lv) pill(c, '난이도 ' + LVNAME[S.pub.lv], 250, 32, 22, LVCOL[S.pub.lv], '#fff', 'left');
+  const sl = Math.ceil(st.left || 0), warn = st.left <= 10 && st.ph === 'play';
+  card(c, 1336, 6, 252, 52, 18, warn ? '#ffe3e3' : '#fff', 3, 3);
+  txt(c, st.ph === 'play' ? '남은 시간 ' + (sl >= 60 ? ((sl / 60) | 0) + '분 ' + String(sl % 60).padStart(2, '0') + '초' : sl + '초') : '준비', 1462, 33, 28, warn ? '#e63946' : '#222');
   const fin = Object.keys(ps).filter(id => ps[id][2] === 'fin').sort((a, b) => ps[a][3] - ps[b][3]).slice(0, 5);
-  if (fin.length) { card(c, 12, 12, 250, 40 + fin.length * 34, 16, 'rgba(255,255,255,.95)', 4, 5); txt(c, '보물 찾은 순서', 137, 34, 22, '#b5651d'); fin.forEach((id, k) => txt(c, `${ps[id][3]}등 ${nameOf(S.players[id])}`, 30, 68 + k * 34, 24, '#222', 'left')); }
-  if (S.pub.lv) lvBadge(c, S.pub.lv, 1588, 112, 22);
+  txt(c, fin.length ? '🏆 ' + fin.map(id => `${ps[id][3]}등 ${nameOf(S.players[id])}`).join(' · ') : '오른쪽 끝 보물 상자를 찾아라!', 860, 33, 24, '#ffe27a');
 }
 
 /* ══════════ 13 땅따먹기 — 4가지 큰 맵 ══════════ */
@@ -3373,12 +3398,13 @@ function buildControl(root, ctx) {
   const bStart = btn('시작', () => send({ t: 'start' }), 'pri'), bPause = btn('일시정지', () => send({ t: 'pause' })), bReveal = btn('정답 공개', () => send({ t: 'reveal' }), 'pri');
   const bNext = btn('다음', () => send({ t: 'next' }), 'pri'), bLook = btn('돌아보기!', () => send({ t: 'look' }), 'warn'), bEnd = btn('지금 끝내고 결과 보기', () => send({ t: 'end' })), bMap = btn('지도로 돌아가기', () => send({ t: 'map' }));
   const bStop = btn('✋ 그만! (미로 끝내기)', () => send({ t: 'end' }), 'warn big');
+  const bQr = btn('📱 입장 QR 띄우기', () => send({ t: 'qr' }));
   const bCan = btn('', () => send({ t: S.pub.can }), 'pri');
   const secret = el('div', { class: 'secret' });
   const game = el('div', { class: 'cblk' }, [h('게임 진행'), el('div', { class: 'row wrap' }, [bStart, bStop, bCan, bPause, bReveal, bNext, bLook, bEnd, bMap]), secret]);
 
   const plist = el('div', { class: 'plist' });
-  const people = el('div', { class: 'cblk' }, [h('참가자와 팀'), el('div', { class: 'row' }, [lab('팀 수', sel('nteams', [[2, '2팀'], [3, '3팀'], [4, '4팀']])), btn('팀 자동 편성', () => send({ t: 'teams', n: o.nteams }))]), plist]);
+  const people = el('div', { class: 'cblk' }, [h('참가자와 팀'), el('div', { class: 'row wrap' }, [bQr, el('span', { class: 'hint', text: '중간에 나갔다 온 친구, 늦게 온 친구는 이 QR로 들어와요. 지도 화면에서는 저절로 보여요.' })]), el('div', { class: 'row' }, [lab('팀 수', sel('nteams', [[2, '2팀'], [3, '3팀'], [4, '4팀']])), btn('팀 자동 편성', () => send({ t: 'teams', n: o.nteams }))]), plist]);
   const letter = el('input', { type: 'text', maxlength: 80, placeholder: '예: 한 학기 동안 고마웠어' });
   const fin = el('div', { class: 'cblk' }, [h('마무리'), lab('편지 끝에 붙일 한마디', letter), el('div', { class: 'row' }, [btn('한마디 저장', () => send({ t: 'letter', text: letter.value })), btn('행사 마치기 (교실로 돌아오기)', () => send({ t: 'finish' }), 'pri')])]);
   const test = el('div', { class: 'cblk' }, [h('시험용 (실제 학생이 아닌 가상 참가자)'), el('div', { class: 'row' }, [btn('가상 참가자 10명 넣기', () => send({ t: 'bots', n: 10 })), btn('가상 참가자 지우기', () => send({ t: 'nobots' }))])]);
@@ -3413,6 +3439,7 @@ function buildControl(root, ctx) {
     show(game, P.scene === 'game'); show(fin, P.scene !== 'lobby');
     show(bStart, P.ph === 'intro'); show(bPause, P.ph === 'play' || (P.gid === 'ox' && P.ph === 'reveal')); bPause.textContent = P.paused ? '계속하기' : '일시정지';
     show(bStop, P.gid === 'maze' && P.ph === 'play');
+    bQr.textContent = P.qr ? '📱 입장 QR 숨기기' : '📱 입장 QR 전광판에 띄우기'; show(bQr, P.scene && P.scene !== 'lobby');
     show(bReveal, P.gid === 'ox' && P.ph === 'closed');
     show(bNext, (P.gid === 'ox' && P.ph === 'reveal') || (P.gid === 'red' && P.ph === 'roundend'));
     bNext.textContent = P.gid === 'ox' ? (P.q && P.q.n < P.q.total ? '기다리지 않고 바로 다음 문제' : '바로 결과 보기') : (P.round < P.rounds ? '다음 판' : '결과 보기');
@@ -3466,7 +3493,7 @@ async function startCtl(code) {
 async function startHost(code) {
   const base = 'rooms/' + code, app = $('#app');
   document.body.className = 'host';
-  const cv = el('canvas', { id: 'cv', width: 1600, height: 900 }), qrBox = el('div', { id: 'qr' });
+  const cv = el('canvas', { id: 'cv', width: 1600, height: 900 }), qrBox = el('div', { id: 'qr' }), qrMini = el('div', { id: 'qrmini' });
   const drawer = el('div', { id: 'drawer', class: 'hidden' });
   const gear = el('button', { id: 'gear', text: '⚙ 진행', onclick: () => drawer.classList.toggle('hidden') });
   const ox3box = el('div', { id: 'ox3box' });
@@ -3477,7 +3504,7 @@ async function startHost(code) {
     el('div', { class: 'hint', text: '① 조종판 열기 → ② 이 창을 빔·TV 화면으로 옮기고 F11 → ③ 노트북에 둔 조종판으로 진행' }),
     el('button', { class: 'b pri', text: '🖥 조종판 새 창으로 열기', onclick: openCtl }), ctlErr,
     el('button', { class: 'b link', text: '이 안내 닫기 (⚙ 진행 버튼으로 진행)', onclick: () => { ctlHelp.remove(); } })]);
-  app.replaceChildren(ox3box, cv, qrBox, gear, drawer, ctlHelp);
+  app.replaceChildren(ox3box, cv, qrBox, qrMini, gear, drawer, ctlHelp);
   let ctlSeen = 0; const ctlOn = () => ctlSeen && Net.now() - ctlSeen < 9000;
   const c = cv.getContext('2d');
   const S = { pub: { scene: 'lobby', v: 0 }, st: null, players: {}, grid: null, disp: {}, fallT: {}, born: {}, t: 0, visited: {} };
@@ -3501,10 +3528,36 @@ async function startHost(code) {
   const joinUrl = appUrl('?r=' + code);
   qrBox.append(el('div', { class: 'qrimg', id: 'qrimg' }), el('div', { class: 'qrcode', text: code }), el('div', { class: 'qrurl', text: joinUrl.replace(/^https?:\/\//, '') }));
   if (window.QRCode) new QRCode($('#qrimg'), { text: joinUrl, width: 300, height: 300 }); else $('#qrimg').textContent = 'QR 대신 아래 주소와 방 번호로 들어오세요';
+  // 중간 참가·다시 들어오기용 작은 QR: 지도 화면에서는 저절로, 게임 중에는 조종판의 "입장 QR 띄우기"로 보인다
+  const qmImg = el('div', { class: 'qmimg' });
+  qrMini.append(el('b', { text: '중간에 들어오기' }), qmImg, el('div', { class: 'qmcode', text: '방 ' + code }));
+  if (window.QRCode) new QRCode(qmImg, { text: joinUrl, width: 118, height: 118 }); else qmImg.textContent = joinUrl.replace(/^https?:\/\//, '');
+  // 학생 폰에 "교실 화면이 살아 있어요"를 2초마다 알린다(폰은 이게 끊기면 '연결이 늦어요'와 다시 연결 버튼을 보여 준다)
+  setInterval(() => { if (cv.isConnected) Net.set(base + '/meta/hb', Net.now()); }, 2000);
 
   const active = () => Object.keys(S.players).filter(id => S.players[id] && S.players[id].c);
+  /* 다시 들어오기: 다른 브라우저로 새로 들어온 학생이 "전에 들어왔던 내 캐릭터"를 고르면(claim)
+     나가 있던 예전 자리의 캐릭터·점수·기록·팀·지금 게임 속 위치를 새 폰으로 옮긴다 */
+  function renameIn(o, a, b, d) {
+    if (!o || typeof o !== 'object' || d > 2 || ArrayBuffer.isView(o)) return;
+    if (Array.isArray(o)) { for (let k = 0; k < o.length; k++) { const v = o[k]; if (v === a) o[k] = b; else if (v && typeof v === 'object') { if (v.id === a) v.id = b; renameIn(v, a, b, d + 1); } } return; }
+    for (const key of Object.keys(o)) { const v = o[key]; if (key === a) { o[b] = v; delete o[key]; } if (v && typeof v === 'object') renameIn(v, a, b, d + 1); }
+  }
+  function claim(nw, old) {
+    const o = S.players[old], me = S.players[nw];
+    if (!o || o.bot || o.on !== false || !o.c) { Net.set(base + '/players/' + nw + '/claim', null); return; }
+    const rec = Object.assign({}, o, { on: true });
+    for (const m of [scores, stats, gp, netIn, evSeen]) if (m && m[old] != null) { m[nw] = m[old]; delete m[old]; }
+    try { if (sim) renameIn(sim, old, nw, 0); if (Gs) renameIn(Gs, old, nw, 0); renameIn(S.disp, old, nw, 1); } catch (e) { console.warn('자리 옮기기', e); }
+    S.players[nw] = rec; delete S.players[old];
+    Net.set(base + '/players/' + old, null); Net.set(base + '/players/' + nw, rec);   // 예전 자리를 먼저 지워야 게임에 다시 끼어들지 않는다
+    Net.set(base + '/sc/' + nw, scores[nw] || 0); Net.set(base + '/sc/' + old, null);
+    tell(nw, { k: 'msg', b: `${o.n}(으)로 다시 들어왔어요`, s: `점수 ${scores[nw] || 0}점 그대로`, c: 'green' });
+    void me;
+  }
   Net.on(base + '/players', v => {
     S.players = v || {};
+    for (const id in S.players) if (S.players[id] && S.players[id].claim) claim(id, S.players[id].claim);
     for (const id in S.players) if (S.players[id].bot && !bots[id]) bots[id] = { x: 0, y: 0, t: 0 };
     if (sim && S.pub.scene === 'game' && sim.add) active().forEach(id => { if (S.pub.gid === 'terr') { if (!sim.p[id]) sim.add(id, teamOf(id)); } else sim.add(id); });
     checkAuto(); ctl.update();
@@ -3538,6 +3591,7 @@ async function startHost(code) {
       case 'go': if (GAMES[m.gid] && GAMES[m.gid].ready && P.scene !== 'lobby' && P.scene !== 'fly') fly(m.gid, m.o || {}); break;
       case 'start': if (P.scene === 'game' && (P.ph === 'intro')) countdown(); break;
       case 'pause': paused = !paused; if (paused) hush(); setPub({ paused }); break;
+      case 'qr': setPub({ qr: !P.qr }); break;
       case 'reveal': if (P.gid === 'ox' && P.ph === 'closed' && sim) sim.ph = 'judge'; break;
       case 'close': if (P.gid === 'ox' && P.ph === 'play' && sim) sim.close(); break;
       case 'next':
@@ -3733,7 +3787,7 @@ async function startHost(code) {
       else if (redIt === 'look') { hush(); beep(988, 0.12, 'square'); setTimeout(() => beep(740, 0.2, 'square'), 140); }
       else if (redIt === 'peek') beep(620, 0.08, 'triangle');
     }
-    const W3 = 2 / 3, pos = id => { const p = S.st && S.st.p && S.st.p[id]; return p ? [p[0], p[1]] : [800, 450]; };
+    const W3 = 2 / 3, pos = id => { const p = S.st && S.st.p && S.st.p[id]; return !p ? [800, 450] : gid === 'maze' ? [MAZE_BOX.x + p[0] * MAZE_BOX.s, MAZE_BOX.y + p[1] * MAZE_BOX.s] : [p[0], p[1]]; };
     (sim.takeEvents && gid !== 'ox' ? sim.takeEvents() : []).forEach(e => {
       if (gid === 'red') { const [x, y] = pos(e.id); if (e.t === 'out') { stat(e.id, 'out'); tell(e.id, { k: 'out' }); sweep(1400, 160, 0.35); (S.shots = S.shots || []).push({ x, y, t: S.t }); FX.pop(x, y - 50, '찍!', '#2f8cff', 34); FX.shake(6); } else { gp[e.id] = (gp[e.id] || 0) + 1; stat(e.id, 'fin'); tell(e.id, { k: 'fin', rank: e.rank }); beep(880, 0.12); FX.stars(x, y, 10); FX.pop(x, y - 60, e.rank + '등!', '#27b56a', 40); } }
       else if (gid === 'maze') { if (e.t === 'crab') { stat(e.id, 'crab'); tell(e.id, { k: 'crab' }); FX.pop(e.x, e.y - 30, '집게!', '#e63946', 30); FX.burst(e.x, e.y, 10, ['#ff4d3d', '#fff']); beep(220, 0.15, 'square'); } else { stat(e.id, 'fin'); tell(e.id, { k: 'fin', rank: e.rank }); beep(880, 0.12); FX.stars(1560, sim.m.exit[1] * sim.T, 12); } }
@@ -3799,12 +3853,13 @@ async function startHost(code) {
   let ac; function beep(f, d, type) { try { ac = ac || new (window.AudioContext || window.webkitAudioContext)(); const o = ac.createOscillator(), g = ac.createGain(); o.type = type || 'sine'; o.frequency.value = f; g.gain.value = 0.08; o.connect(g); g.connect(ac.destination); o.start(); o.stop(ac.currentTime + d); } catch (e) { } }
 
   /* ── 그리기 ── */
-  function fit() { const s = Math.min(innerWidth / 1600, innerHeight / 900); cv.style.width = 1600 * s + 'px'; cv.style.height = 900 * s + 'px'; Object.assign(ox3box.style, { left: (innerWidth - 1600 * s) / 2 + 'px', top: (innerHeight - 900 * s) / 2 + 'px', width: 1600 * s + 'px', height: 900 * s + 'px' }); qrBox.style.transform = `scale(${s})`; qrBox.style.left = (innerWidth - 1600 * s) / 2 + 60 * s + 'px'; qrBox.style.top = (innerHeight - 900 * s) / 2 + 250 * s + 'px'; }
+  function fit() { const s = Math.min(innerWidth / 1600, innerHeight / 900); cv.style.width = 1600 * s + 'px'; cv.style.height = 900 * s + 'px'; Object.assign(ox3box.style, { left: (innerWidth - 1600 * s) / 2 + 'px', top: (innerHeight - 900 * s) / 2 + 'px', width: 1600 * s + 'px', height: 900 * s + 'px' }); qrBox.style.transform = `scale(${s})`; qrBox.style.left = (innerWidth - 1600 * s) / 2 + 60 * s + 'px'; qrBox.style.top = (innerHeight - 900 * s) / 2 + 250 * s + 'px'; qrMini.style.transform = `scale(${s})`; qrMini.style.left = (innerWidth - 1600 * s) / 2 + 888 * s + 'px'; qrMini.style.top = (innerHeight - 900 * s) / 2 + 688 * s + 'px'; }
   addEventListener('resize', fit); fit();
   let lastCount = -1; const host = { con: null };
   function frame(ms) {
     S.t = ms / 1000; const P = S.pub, t = S.t;
     qrBox.style.display = P.scene === 'lobby' ? '' : 'none';
+    qrMini.style.display = P.scene !== 'lobby' && P.scene !== 'fly' && (P.scene === 'map' || P.qr) ? '' : 'none';
     if (P.scene !== 'lobby' && ctlHelp.isConnected) ctlHelp.remove();   // 입장이 끝나면 안내는 저절로 닫힌다(⚙ 진행 서랍에도 같은 버튼이 있다)
     const con = ctlOn(); if (con !== host.con) { host.con = con; gear.style.display = con ? 'none' : ''; if (con) { drawer.classList.add('hidden'); if (ctlHelp.isConnected) ctlHelp.remove(); } }
     c.setTransform(1, 0, 0, 1, 0, 0); c.save(); FX.pre(c);
@@ -3822,7 +3877,7 @@ async function startHost(code) {
     } else if (P.scene === 'game') {
       const g = P.gid;
       if (G) { try { G.draw(c, S, Gs, ctx); } catch (err) { console.error(err); } }
-      else if (g === 'ox') { c.clearRect(0, 0, 1600, 900); if (OX3D.ready) { OX3D.attach(ox3box); OX3D.frame({ st: S.st, pub: P, players: S.players, me: null, tv: true, nameOf: pl => nameOf(pl) }); } else drawOX2D(c, S, OX3D.failed); drawOXHud(c, S); } else if (g === 'red') drawRed(c, S); else if (g === 'maze') { c.fillStyle = '#1e7fd6'; c.fillRect(0, 0, 1600, 900); drawMaze(c, S); hudMaze(c, S); }
+      else if (g === 'ox') { c.clearRect(0, 0, 1600, 900); if (OX3D.ready) { OX3D.attach(ox3box); OX3D.frame({ st: S.st, pub: P, players: S.players, me: null, tv: true, nameOf: pl => nameOf(pl) }); } else drawOX2D(c, S, OX3D.failed); drawOXHud(c, S); } else if (g === 'red') drawRed(c, S); else if (g === 'maze') { c.fillStyle = '#1e7fd6'; c.fillRect(0, 0, 1600, 900); c.save(); c.translate(MAZE_BOX.x, MAZE_BOX.y); c.scale(MAZE_BOX.s, MAZE_BOX.s); drawMaze(c, S); c.restore(); hudMaze(c, S); }
       else if (g === 'terr') { c.fillStyle = '#3a2f26'; c.fillRect(0, 0, 1600, 900); c.drawImage(terrBoardSmall(S), TERR_VIEW.x, TERR_VIEW.y); c.save(); c.translate(TERR_VIEW.x, TERR_VIEW.y); c.scale(TERR_VIEW.s, TERR_VIEW.s); drawTerr(c, S, true); c.restore(); hudTerr(c, S); } else if (g === 'worm') { c.save(); c.scale(1600 / 2400, 900 / 1350); drawWorm(c, S); c.restore(); hudWorm(c, S); }
       if (P.practice) pill(c, '연습판', 20, 820, 28, '#ffd400', INK, 'left');
       if (P.ph === 'intro') overlayIntro(P); else if (P.ph === 'count') overlayCount(P); else if (P.ph === 'result') overlayResult(P);
@@ -4073,12 +4128,19 @@ async function startPlayer(code) {
   const uid = await Net.anon(), mine = base + '/players/' + uid;
   if (!(await Net.get(base + '/meta'))) { app.replaceChildren(el('div', { class: 'card' }, [el('div', { class: 'big', text: `${code}번 방을 찾을 수 없어요` }), el('div', { class: 'sub', text: '교실 화면의 방 번호를 다시 확인해 주세요.' }), navLink('처음으로', '?', 'b pri')])); return; }
   let me = await Net.get(mine);
-  if (!me || !me.n) me = await new Promise(res => {
-    const inp = el('input', { type: 'text', maxlength: 8, placeholder: '닉네임 (8자까지)' }), err = el('div', { class: 'err' });
-    inp.addEventListener('input', () => (err.textContent = ''));
-    const go = () => { const n = inp.value.trim(); if (!n) { err.textContent = '닉네임을 먼저 적어 주세요.'; return; } const m = { n }; Net.set(mine, m); res(m); };
-    app.replaceChildren(el('div', { class: 'card' }, [el('div', { class: 'big', text: '우리 반 게임 페스티벌' }), el('div', { class: 'sub', text: `${code}번 방에 들어가요` }), inp, err, el('button', { class: 'b pri', text: '입장', onclick: go })]));
-  });
+  if (!me || !me.n) {
+    // 다른 브라우저로 다시 들어온 친구: 나가 있는 캐릭터 중에서 내 캐릭터를 고르면 점수·기록을 이어 간다
+    const all = (await Net.get(base + '/players')) || {};
+    const away = Object.keys(all).filter(id => id !== uid && all[id] && all[id].n && all[id].c && !all[id].bot && all[id].on === false).sort((a, b) => (all[a].n > all[b].n ? 1 : -1));
+    me = await new Promise(res => {
+      const inp = el('input', { type: 'text', maxlength: 8, placeholder: '닉네임 (8자까지)' }), err = el('div', { class: 'err' });
+      inp.addEventListener('input', () => (err.textContent = ''));
+      const go = () => { const n = inp.value.trim(); if (!n) { err.textContent = '닉네임을 먼저 적어 주세요.'; return; } const m = { n }; Net.set(mine, m); res(m); };
+      const pick = id => { const o = all[id]; if (!confirm(`'${o.n}'(으)로 이어서 할까요?\n내 캐릭터가 맞을 때만 눌러 주세요.`)) return; const m = { n: o.n, c: o.c, claim: id }; Net.set(mine, m); res(m); };
+      const back = away.length ? el('div', { class: 'card' }, [el('div', { class: 'sub', text: '아까 들어왔다가 나갔나요? 내 이름을 누르면 점수 그대로 이어서 해요' }), el('div', { class: 'claim' }, away.map(id => el('button', { class: 'b', text: '↩ ' + all[id].n, onclick: () => pick(id) })))]) : null;
+      app.replaceChildren(...[el('div', { class: 'card' }, [el('div', { class: 'big', text: '우리 반 게임 페스티벌' }), el('div', { class: 'sub', text: `${code}번 방에 들어가요` }), inp, err, el('button', { class: 'b pri', text: '새로 입장', onclick: go })]), back].filter(Boolean));
+    });
+  }
   if (!me.c) {
     await cookieStage(app, '여행 친구가 들어 있는 포춘쿠키');
     me.c = 1 + ((Math.random() * 99999) | 0);
@@ -4096,7 +4158,15 @@ async function startPlayer(code) {
   const toast = el('div', { id: 'ptoast' }), knob = el('div', { id: 'pknob' }), jbase = el('div', { id: 'pbase' }, [knob]), joy = el('div', { id: 'pjoy' }, [jbase, el('div', { class: 'jhint', text: '여기를 밀어서 움직여요' })]);
   const nick = el('b', { text: me.n }), score = el('span', { text: '0점' }), place = el('div', { id: 'pplace' });
   const overlay = el('div', { id: 'pover', class: 'hidden' });
-  app.replaceChildren(el('div', { id: 'ptop' }, [nick, score, place]), el('div', { id: 'pmid' }, [pv, pask, msg]), joy, toast, overlay);
+  // 연결이 늦을 때(폰이 잠들었다 깨거나 와이파이가 흔들릴 때): 안내 + 다시 연결 + 처음부터 다시 들어가기(같은 캐릭터로 돌아온다)
+  const reEnter = el('a', { class: 'b link', href: appUrl('?r=' + code), text: '처음부터 다시 들어가기' }); if (window.GAS_BASE) reEnter.target = '_top';
+  const netBar = el('div', { id: 'pnet', class: 'hidden' }, [el('span', { text: '📶 교실 화면과 연결이 늦어요 · 다시 연결하는 중…' }), el('button', { class: 'b', text: '다시 연결', onclick: () => { Net.kick(); kickAt = performance.now(); } }), reEnter]);
+  app.replaceChildren(el('div', { id: 'ptop' }, [nick, score, place]), el('div', { id: 'pmid' }, [pv, pask, msg]), joy, toast, overlay, netBar);
+  let hbAt = performance.now(), conn = true, lostAt = 0, kickAt = 0;
+  Net.on(base + '/meta/hb', () => (hbAt = performance.now()));
+  Net.conn(v => { conn = v; if (!v) lostAt = performance.now(); });
+  const stale = () => document.visibilityState === 'visible' && (performance.now() - hbAt > 7000 || (!conn && performance.now() - lostAt > 2500));
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && performance.now() - hbAt > 5000) { Net.kick(); kickAt = performance.now(); } });
   const c = pv.getContext('2d');
   const S = { pub: {}, st: null, players: { [uid]: me }, grid: null, disp: {}, fallT: {}, born: {}, t: 0, me: uid, phone: true };
   let lastMsg = null, askKey = null, askClosed = null, env = { sel: {}, me: uid, send: e => Net.ev(base + '/ev/' + uid, Object.assign({ q: S.pub.ask && S.pub.ask.key, ct: Net.now(), n: Date.now() + Math.random() }, e)) };
@@ -4212,6 +4282,7 @@ async function startPlayer(code) {
     if (pv.width !== Math.round(w * dpr) || pv.height !== Math.round(hgt * dpr)) { pv.width = Math.round(w * dpr); pv.height = Math.round(hgt * dpr); }
     c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, pv.width, pv.height);
     if (toastT && ms - toastT > 2200) { toast.className = ''; toastT = 0; }
+    const slow = stale(); netBar.classList.toggle('hidden', !slow); if (slow && performance.now() - kickAt > 12000) { Net.kick(); kickAt = performance.now(); }
     const isG = P.scene === 'game' && !!GAMEDEF[P.gid], askOn = isG && P.ask && !['intro', 'count', 'result'].includes(P.ph);
     const play = P.scene === 'game' && !isG && (P.ph === 'play' || P.ph === 'count');
     pv.classList.toggle('hidden', !!askOn); pask.classList.toggle('hidden', !askOn);
@@ -4221,7 +4292,8 @@ async function startPlayer(code) {
       env.teamColor = null;
       renderAsk(pask, P.ask, env); if (env.diff) env.diff.setImg(S.img);
     }
-    if (!askOn) askKey = null;
+    // 게임이 끝나 입력 화면이 닫히면 내용을 비운다 → 숨은 그림판이 뒤에서 계속 그려지며 폰이 느려지는 것을 막는다
+    if (!askOn) { if (askKey !== null || pask.firstChild) { pask.replaceChildren(); env.diff = null; } askKey = null; }
     if (env.diff && P.df) env.diff.setFixed(P.df.fixed);
     const oxOn = P.scene === 'game' && P.gid === 'ox';
     document.body.classList.toggle('ox3', oxOn); document.body.classList.toggle('oxres', oxOn && P.ph === 'result');

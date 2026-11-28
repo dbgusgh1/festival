@@ -39,18 +39,17 @@ function buildControl(root, ctx) {
   const bStart = btn('시작', () => send({ t: 'start' }), 'pri'), bPause = btn('일시정지', () => send({ t: 'pause' })), bReveal = btn('정답 공개', () => send({ t: 'reveal' }), 'pri');
   const bNext = btn('다음', () => send({ t: 'next' }), 'pri'), bLook = btn('돌아보기!', () => send({ t: 'look' }), 'warn'), bEnd = btn('지금 끝내고 결과 보기', () => send({ t: 'end' })), bMap = btn('지도로 돌아가기', () => send({ t: 'map' }));
   const bStop = btn('✋ 그만! (미로 끝내기)', () => send({ t: 'end' }), 'warn big');
+  const bQr = btn('📱 입장 QR 띄우기', () => send({ t: 'qr' }));
   const bCan = btn('', () => send({ t: S.pub.can }), 'pri');
   const secret = el('div', { class: 'secret' });
   const game = el('div', { class: 'cblk' }, [h('게임 진행'), el('div', { class: 'row wrap' }, [bStart, bStop, bCan, bPause, bReveal, bNext, bLook, bEnd, bMap]), secret]);
 
   const plist = el('div', { class: 'plist' });
-  const people = el('div', { class: 'cblk' }, [h('참가자와 팀'), el('div', { class: 'row' }, [lab('팀 수', sel('nteams', [[2, '2팀'], [3, '3팀'], [4, '4팀']])), btn('팀 자동 편성', () => send({ t: 'teams', n: o.nteams }))]), plist]);
+  const people = el('div', { class: 'cblk' }, [h('참가자와 팀'), el('div', { class: 'row wrap' }, [bQr, el('span', { class: 'hint', text: '중간에 나갔다 온 친구, 늦게 온 친구는 이 QR로 들어와요. 지도 화면에서는 저절로 보여요.' })]), el('div', { class: 'row' }, [lab('팀 수', sel('nteams', [[2, '2팀'], [3, '3팀'], [4, '4팀']])), btn('팀 자동 편성', () => send({ t: 'teams', n: o.nteams }))]), plist]);
   const letter = el('input', { type: 'text', maxlength: 80, placeholder: '예: 한 학기 동안 고마웠어' });
-  const bQr = btn('📱 입장 QR 띄우기', () => send({ t: 'qr' }));
-  const late = el('div', { class: 'cblk' }, [h('중간 합류'), el('div', { class: 'hint', text: '나갔던 학생이나 늦게 온 학생은 이 QR을 찍고 들어와요. 지금 하는 판이 끝나면 다음 게임부터 함께해요.' }), bQr]);
   const fin = el('div', { class: 'cblk' }, [h('마무리'), lab('편지 끝에 붙일 한마디', letter), el('div', { class: 'row' }, [btn('한마디 저장', () => send({ t: 'letter', text: letter.value })), btn('행사 마치기 (교실로 돌아오기)', () => send({ t: 'finish' }), 'pri')])]);
   const test = el('div', { class: 'cblk' }, [h('시험용 (실제 학생이 아닌 가상 참가자)'), el('div', { class: 'row' }, [btn('가상 참가자 10명 넣기', () => send({ t: 'bots', n: 10 })), btn('가상 참가자 지우기', () => send({ t: 'nobots' }))])]);
-  root.replaceChildren(status, lobby, dest, game, late, people, fin, test);
+  root.replaceChildren(status, lobby, dest, game, people, fin, test);
   const show = (n, v) => (n.style.display = v ? '' : 'none');
   let pkey = '', skey = '';
   const warn = () => ctx.screen ? el('div', { class: 'err', text: '이 서랍은 전광판에 비쳐요. 노트북 조종판 창이나 선생님 폰에서 하세요.' }) : null;
@@ -78,9 +77,10 @@ function buildControl(root, ctx) {
     const g = GAMES[P.gid], where = { lobby: '입장 대기', map: '지도에서 여행지 고르는 중', fly: '이동 중', game: g ? g.place + ' · ' + g.name + (P.lv ? ' · 난이도 ' + LVNAME[P.lv] : '') : '', end: '행사 마침' }[P.scene] || '';
     status.textContent = `방 ${ctx.code} · ${ids.length}명 · ${where}` + (P.practice && P.scene === 'game' ? ' · 연습판' : '');
     show(lobby, P.scene === 'lobby'); show(dest, P.scene === 'map' || (P.scene === 'game' && P.ph === 'result') || P.scene === 'end');
-    show(game, P.scene === 'game'); show(fin, P.scene !== 'lobby'); show(late, P.scene !== 'lobby'); bQr.textContent = P.qr ? '📱 입장 QR 숨기기' : '📱 입장 QR 띄우기';
+    show(game, P.scene === 'game'); show(fin, P.scene !== 'lobby');
     show(bStart, P.ph === 'intro'); show(bPause, P.ph === 'play' || (P.gid === 'ox' && P.ph === 'reveal')); bPause.textContent = P.paused ? '계속하기' : '일시정지';
     show(bStop, P.gid === 'maze' && P.ph === 'play');
+    bQr.textContent = P.qr ? '📱 입장 QR 숨기기' : '📱 입장 QR 전광판에 띄우기'; show(bQr, P.scene && P.scene !== 'lobby');
     show(bReveal, P.gid === 'ox' && P.ph === 'closed');
     show(bNext, (P.gid === 'ox' && P.ph === 'reveal') || (P.gid === 'red' && P.ph === 'roundend'));
     bNext.textContent = P.gid === 'ox' ? (P.q && P.q.n < P.q.total ? '기다리지 않고 바로 다음 문제' : '바로 결과 보기') : (P.round < P.rounds ? '다음 판' : '결과 보기');

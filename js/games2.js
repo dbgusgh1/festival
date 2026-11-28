@@ -622,7 +622,6 @@ const GAMEDEF = {
   },
 
   /* ═════ 16 틀린 그림 찾기 ═════ */
-  /* (기본 사진 그림은 파일 맨 아래 DIFF_PHOTOS) */
   diff: {
     setup(ctx) {
       const mine = ctx.photos('diff'), scenes = shuffle(Object.keys(ART.SCENES)).map(k => ({ scene: k }));

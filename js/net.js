@@ -16,7 +16,7 @@ function el(tag, attrs, kids) {
 let QS = new URLSearchParams(window.GAS_QS != null ? window.GAS_QS : location.search);
 const APP_BASE = window.GAS_BASE || (location.origin + location.pathname);
 const appUrl = q => APP_BASE + q + (QS.has('demo') ? (q.includes('?') ? '&' : '?') + 'demo' : '');
-const APP_VER = 'v3.2';
+const APP_VER = 'v3.3';
 // 오류가 나면 빈 화면 대신 아래쪽 빨간 상자에 이유를 보여 준다 (화면을 찍어 보내면 바로 고칠 수 있게)
 function showErr(m) {
   try {
@@ -69,7 +69,10 @@ const Net = (function () {
       ev: (p, v) => db.ref(p).set(Object.assign(clean(v), { at: firebase.database.ServerValue.TIMESTAMP })).catch(e => console.warn('입력 실패', e.message)),
       get: p => db.ref(p).get().then(s => s.val()),
       on: (p, cb) => db.ref(p).on('value', s => cb(s.val())),
-      gone: (p, v) => db.ref(p).onDisconnect().set(v)
+      gone: (p, v) => db.ref(p).onDisconnect().set(v),
+      // 연결 상태(폰이 잠들었다 깨거나 와이파이가 바뀌면 잠깐 끊긴다)와 강제 재연결
+      conn: cb => db.ref('.info/connected').on('value', s => cb(!!s.val())),
+      kick: () => { try { firebase.database().goOffline(); setTimeout(() => firebase.database().goOnline(), 300); } catch (e) { } }
     };
   }
 
@@ -111,6 +114,9 @@ const Net = (function () {
     ev(p, v) { return this.set(p, Object.assign(clean(v), { at: Date.now() })); },
     get: async p => { await ready; return clean(read(p)); },
     on: (p, cb) => { subs.push({ p, cb }); ready.then(() => cb(clean(read(p)))); },
-    gone: () => {}
+    // 연습 모드: 창을 닫으면 '나감'을 다른 창에 알린다(실제 연결의 onDisconnect 흉내)
+    gone: (p, v) => addEventListener('pagehide', () => { v = clean(v); write(p, v); bc.postMessage({ t: 'set', p, v }); }),
+    conn: cb => cb(true),
+    kick: () => {}
   };
 })();

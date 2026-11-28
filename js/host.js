@@ -2,7 +2,7 @@
 async function startHost(code) {
   const base = 'rooms/' + code, app = $('#app');
   document.body.className = 'host';
-  const cv = el('canvas', { id: 'cv', width: 1600, height: 900 }), qrBox = el('div', { id: 'qr' });
+  const cv = el('canvas', { id: 'cv', width: 1600, height: 900 }), qrBox = el('div', { id: 'qr' }), qrMini = el('div', { id: 'qrmini' });
   const drawer = el('div', { id: 'drawer', class: 'hidden' });
   const gear = el('button', { id: 'gear', text: '⚙ 진행', onclick: () => drawer.classList.toggle('hidden') });
   const ox3box = el('div', { id: 'ox3box' });
@@ -13,7 +13,7 @@ async function startHost(code) {
     el('div', { class: 'hint', text: '① 조종판 열기 → ② 이 창을 빔·TV 화면으로 옮기고 F11 → ③ 노트북에 둔 조종판으로 진행' }),
     el('button', { class: 'b pri', text: '🖥 조종판 새 창으로 열기', onclick: openCtl }), ctlErr,
     el('button', { class: 'b link', text: '이 안내 닫기 (⚙ 진행 버튼으로 진행)', onclick: () => { ctlHelp.remove(); } })]);
-  app.replaceChildren(ox3box, cv, qrBox, gear, drawer, ctlHelp);
+  app.replaceChildren(ox3box, cv, qrBox, qrMini, gear, drawer, ctlHelp);
   let ctlSeen = 0; const ctlOn = () => ctlSeen && Net.now() - ctlSeen < 9000;
   const c = cv.getContext('2d');
   const S = { pub: { scene: 'lobby', v: 0 }, st: null, players: {}, grid: null, disp: {}, fallT: {}, born: {}, t: 0, visited: {} };
@@ -37,10 +37,36 @@ async function startHost(code) {
   const joinUrl = appUrl('?r=' + code);
   qrBox.append(el('div', { class: 'qrimg', id: 'qrimg' }), el('div', { class: 'qrcode', text: code }), el('div', { class: 'qrurl', text: joinUrl.replace(/^https?:\/\//, '') }));
   if (window.QRCode) new QRCode($('#qrimg'), { text: joinUrl, width: 300, height: 300 }); else $('#qrimg').textContent = 'QR 대신 아래 주소와 방 번호로 들어오세요';
+  // 중간 참가·다시 들어오기용 작은 QR: 지도 화면에서는 저절로, 게임 중에는 조종판의 "입장 QR 띄우기"로 보인다
+  const qmImg = el('div', { class: 'qmimg' });
+  qrMini.append(el('b', { text: '중간에 들어오기' }), qmImg, el('div', { class: 'qmcode', text: '방 ' + code }));
+  if (window.QRCode) new QRCode(qmImg, { text: joinUrl, width: 118, height: 118 }); else qmImg.textContent = joinUrl.replace(/^https?:\/\//, '');
+  // 학생 폰에 "교실 화면이 살아 있어요"를 2초마다 알린다(폰은 이게 끊기면 '연결이 늦어요'와 다시 연결 버튼을 보여 준다)
+  setInterval(() => { if (cv.isConnected) Net.set(base + '/meta/hb', Net.now()); }, 2000);
 
   const active = () => Object.keys(S.players).filter(id => S.players[id] && S.players[id].c);
+  /* 다시 들어오기: 다른 브라우저로 새로 들어온 학생이 "전에 들어왔던 내 캐릭터"를 고르면(claim)
+     나가 있던 예전 자리의 캐릭터·점수·기록·팀·지금 게임 속 위치를 새 폰으로 옮긴다 */
+  function renameIn(o, a, b, d) {
+    if (!o || typeof o !== 'object' || d > 2 || ArrayBuffer.isView(o)) return;
+    if (Array.isArray(o)) { for (let k = 0; k < o.length; k++) { const v = o[k]; if (v === a) o[k] = b; else if (v && typeof v === 'object') { if (v.id === a) v.id = b; renameIn(v, a, b, d + 1); } } return; }
+    for (const key of Object.keys(o)) { const v = o[key]; if (key === a) { o[b] = v; delete o[key]; } if (v && typeof v === 'object') renameIn(v, a, b, d + 1); }
+  }
+  function claim(nw, old) {
+    const o = S.players[old], me = S.players[nw];
+    if (!o || o.bot || o.on !== false || !o.c) { Net.set(base + '/players/' + nw + '/claim', null); return; }
+    const rec = Object.assign({}, o, { on: true });
+    for (const m of [scores, stats, gp, netIn, evSeen]) if (m && m[old] != null) { m[nw] = m[old]; delete m[old]; }
+    try { if (sim) renameIn(sim, old, nw, 0); if (Gs) renameIn(Gs, old, nw, 0); renameIn(S.disp, old, nw, 1); } catch (e) { console.warn('자리 옮기기', e); }
+    S.players[nw] = rec; delete S.players[old];
+    Net.set(base + '/players/' + old, null); Net.set(base + '/players/' + nw, rec);   // 예전 자리를 먼저 지워야 게임에 다시 끼어들지 않는다
+    Net.set(base + '/sc/' + nw, scores[nw] || 0); Net.set(base + '/sc/' + old, null);
+    tell(nw, { k: 'msg', b: `${o.n}(으)로 다시 들어왔어요`, s: `점수 ${scores[nw] || 0}점 그대로`, c: 'green' });
+    void me;
+  }
   Net.on(base + '/players', v => {
     S.players = v || {};
+    for (const id in S.players) if (S.players[id] && S.players[id].claim) claim(id, S.players[id].claim);
     for (const id in S.players) if (S.players[id].bot && !bots[id]) bots[id] = { x: 0, y: 0, t: 0 };
     if (sim && S.pub.scene === 'game' && sim.add) active().forEach(id => { if (S.pub.gid === 'terr') { if (!sim.p[id]) sim.add(id, teamOf(id)); } else sim.add(id); });
     checkAuto(); ctl.update();
@@ -74,6 +100,7 @@ async function startHost(code) {
       case 'go': if (GAMES[m.gid] && GAMES[m.gid].ready && P.scene !== 'lobby' && P.scene !== 'fly') fly(m.gid, m.o || {}); break;
       case 'start': if (P.scene === 'game' && (P.ph === 'intro')) countdown(); break;
       case 'pause': paused = !paused; if (paused) hush(); setPub({ paused }); break;
+      case 'qr': setPub({ qr: !P.qr }); break;
       case 'reveal': if (P.gid === 'ox' && P.ph === 'closed' && sim) sim.ph = 'judge'; break;
       case 'close': if (P.gid === 'ox' && P.ph === 'play' && sim) sim.close(); break;
       case 'next':
@@ -84,7 +111,6 @@ async function startHost(code) {
       case 'end': if (P.scene === 'game' && P.ph !== 'result' && (P.ph !== 'intro' || G)) { if (sim && (P.ph === 'play')) { if (P.gid === 'terr') sim.list.forEach(pl => sim.clearTrail(pl)); } result(); } break;
       case 'map': clearTimeout(timer); hush(); clearG(); sim = null; paused = false; setPub({ scene: 'map', ph: null, q: null, res: null, paused: false }); break;
       case 'finish': finish(); break;
-      case 'qr': setPub({ qr: !P.qr }); break;
       case 'teams': nTeams = m.n || nTeams; shuffleTeams(); break;
       case 'team': if (S.players[m.pid]) Net.set(base + '/players/' + m.pid + '/tm', ((S.players[m.pid].tm || 0) + 1) % nTeams); break;
       case 'hide': if (S.players[m.pid]) Net.set(base + '/players/' + m.pid + '/hide', S.players[m.pid].hide ? null : true); break;
@@ -270,7 +296,7 @@ async function startHost(code) {
       else if (redIt === 'look') { hush(); beep(988, 0.12, 'square'); setTimeout(() => beep(740, 0.2, 'square'), 140); }
       else if (redIt === 'peek') beep(620, 0.08, 'triangle');
     }
-    const W3 = 2 / 3, pos = id => { const p = S.st && S.st.p && S.st.p[id]; return p ? [p[0], p[1]] : [800, 450]; };
+    const W3 = 2 / 3, pos = id => { const p = S.st && S.st.p && S.st.p[id]; return !p ? [800, 450] : gid === 'maze' ? [MAZE_BOX.x + p[0] * MAZE_BOX.s, MAZE_BOX.y + p[1] * MAZE_BOX.s] : [p[0], p[1]]; };
     (sim.takeEvents && gid !== 'ox' ? sim.takeEvents() : []).forEach(e => {
       if (gid === 'red') { const [x, y] = pos(e.id); if (e.t === 'out') { stat(e.id, 'out'); tell(e.id, { k: 'out' }); sweep(1400, 160, 0.35); (S.shots = S.shots || []).push({ x, y, t: S.t }); FX.pop(x, y - 50, '찍!', '#2f8cff', 34); FX.shake(6); } else { gp[e.id] = (gp[e.id] || 0) + 1; stat(e.id, 'fin'); tell(e.id, { k: 'fin', rank: e.rank }); beep(880, 0.12); FX.stars(x, y, 10); FX.pop(x, y - 60, e.rank + '등!', '#27b56a', 40); } }
       else if (gid === 'maze') { if (e.t === 'crab') { stat(e.id, 'crab'); tell(e.id, { k: 'crab' }); FX.pop(e.x, e.y - 30, '집게!', '#e63946', 30); FX.burst(e.x, e.y, 10, ['#ff4d3d', '#fff']); beep(220, 0.15, 'square'); } else { stat(e.id, 'fin'); tell(e.id, { k: 'fin', rank: e.rank }); beep(880, 0.12); FX.stars(1560, sim.m.exit[1] * sim.T, 12); } }
@@ -336,15 +362,13 @@ async function startHost(code) {
   let ac; function beep(f, d, type) { try { ac = ac || new (window.AudioContext || window.webkitAudioContext)(); const o = ac.createOscillator(), g = ac.createGain(); o.type = type || 'sine'; o.frequency.value = f; g.gain.value = 0.08; o.connect(g); g.connect(ac.destination); o.start(); o.stop(ac.currentTime + d); } catch (e) { } }
 
   /* ── 그리기 ── */
-  function fit() { const s = Math.min(innerWidth / 1600, innerHeight / 900); cv.style.width = 1600 * s + 'px'; cv.style.height = 900 * s + 'px'; Object.assign(ox3box.style, { left: (innerWidth - 1600 * s) / 2 + 'px', top: (innerHeight - 900 * s) / 2 + 'px', width: 1600 * s + 'px', height: 900 * s + 'px' }); const ox0 = (innerWidth - 1600 * s) / 2, oy0 = (innerHeight - 900 * s) / 2;
-    if (qrBox.classList.contains('mini')) { const m = s * 0.55; qrBox.style.transform = `scale(${m})`; qrBox.style.left = ox0 + 16 * s + 'px'; qrBox.style.top = oy0 + 900 * s - (qrBox.offsetHeight || 540) * m - 40 * s + 'px'; }
-    else { qrBox.style.transform = `scale(${s})`; qrBox.style.left = ox0 + 60 * s + 'px'; qrBox.style.top = oy0 + 250 * s + 'px'; } }
+  function fit() { const s = Math.min(innerWidth / 1600, innerHeight / 900); cv.style.width = 1600 * s + 'px'; cv.style.height = 900 * s + 'px'; Object.assign(ox3box.style, { left: (innerWidth - 1600 * s) / 2 + 'px', top: (innerHeight - 900 * s) / 2 + 'px', width: 1600 * s + 'px', height: 900 * s + 'px' }); qrBox.style.transform = `scale(${s})`; qrBox.style.left = (innerWidth - 1600 * s) / 2 + 60 * s + 'px'; qrBox.style.top = (innerHeight - 900 * s) / 2 + 250 * s + 'px'; qrMini.style.transform = `scale(${s})`; qrMini.style.left = (innerWidth - 1600 * s) / 2 + 888 * s + 'px'; qrMini.style.top = (innerHeight - 900 * s) / 2 + 688 * s + 'px'; }
   addEventListener('resize', fit); fit();
   let lastCount = -1; const host = { con: null };
-  function frame(ms) { requestAnimationFrame(frame); try { frameBody(ms); } catch (err) { console.error('교실 화면 그리기 오류', err); } }
-  function frameBody(ms) {
+  function frame(ms) {
     S.t = ms / 1000; const P = S.pub, t = S.t;
-    const qrOn = P.scene === 'lobby' || !!P.qr; qrBox.style.display = qrOn ? '' : 'none'; qrBox.classList.toggle('mini', qrOn && P.scene !== 'lobby'); if (qrOn && qrBox.dataset.m !== String(P.scene === 'lobby')) { qrBox.dataset.m = String(P.scene === 'lobby'); fit(); }
+    qrBox.style.display = P.scene === 'lobby' ? '' : 'none';
+    qrMini.style.display = P.scene !== 'lobby' && P.scene !== 'fly' && (P.scene === 'map' || P.qr) ? '' : 'none';
     if (P.scene !== 'lobby' && ctlHelp.isConnected) ctlHelp.remove();   // 입장이 끝나면 안내는 저절로 닫힌다(⚙ 진행 서랍에도 같은 버튼이 있다)
     const con = ctlOn(); if (con !== host.con) { host.con = con; gear.style.display = con ? 'none' : ''; if (con) { drawer.classList.add('hidden'); if (ctlHelp.isConnected) ctlHelp.remove(); } }
     c.setTransform(1, 0, 0, 1, 0, 0); c.save(); FX.pre(c);
@@ -362,13 +386,14 @@ async function startHost(code) {
     } else if (P.scene === 'game') {
       const g = P.gid;
       if (G) { try { G.draw(c, S, Gs, ctx); } catch (err) { console.error(err); } }
-      else if (g === 'ox') { c.clearRect(0, 0, 1600, 900); if (OX3D.ready) { OX3D.attach(ox3box); OX3D.frame({ st: S.st, pub: P, players: S.players, me: null, tv: true, nameOf: pl => nameOf(pl) }); } else drawOX2D(c, S, OX3D.failed); drawOXHud(c, S); } else if (g === 'red') drawRed(c, S); else if (g === 'maze') { c.fillStyle = '#1e7fd6'; c.fillRect(0, 0, 1600, 900); drawMaze(c, S); hudMaze(c, S); }
+      else if (g === 'ox') { c.clearRect(0, 0, 1600, 900); if (OX3D.ready) { OX3D.attach(ox3box); OX3D.frame({ st: S.st, pub: P, players: S.players, me: null, tv: true, nameOf: pl => nameOf(pl) }); } else drawOX2D(c, S, OX3D.failed); drawOXHud(c, S); } else if (g === 'red') drawRed(c, S); else if (g === 'maze') { c.fillStyle = '#1e7fd6'; c.fillRect(0, 0, 1600, 900); c.save(); c.translate(MAZE_BOX.x, MAZE_BOX.y); c.scale(MAZE_BOX.s, MAZE_BOX.s); drawMaze(c, S); c.restore(); hudMaze(c, S); }
       else if (g === 'terr') { c.fillStyle = '#3a2f26'; c.fillRect(0, 0, 1600, 900); c.drawImage(terrBoardSmall(S), TERR_VIEW.x, TERR_VIEW.y); c.save(); c.translate(TERR_VIEW.x, TERR_VIEW.y); c.scale(TERR_VIEW.s, TERR_VIEW.s); drawTerr(c, S, true); c.restore(); hudTerr(c, S); } else if (g === 'worm') { c.save(); c.scale(1600 / 2400, 900 / 1350); drawWorm(c, S); c.restore(); hudWorm(c, S); }
       if (P.practice) pill(c, '연습판', 20, 820, 28, '#ffd400', INK, 'left');
       if (P.ph === 'intro') overlayIntro(P); else if (P.ph === 'count') overlayCount(P); else if (P.ph === 'result') overlayResult(P);
       if (P.paused) { c.fillStyle = 'rgba(0,0,0,.5)'; c.fillRect(0, 0, 1600, 900); txt(c, '잠깐 멈춤', 800, 450, 140, '#fff'); }
     }
     c.restore(); FX.draw(c);
+    requestAnimationFrame(frame);
   }
   function overlayIntro(P) {
     const g = GAMES[P.gid], t = S.t; c.fillStyle = 'rgba(20,14,40,.55)'; c.fillRect(0, 0, 1600, 900);
