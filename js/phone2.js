@@ -96,7 +96,7 @@ function diffViewer(root, env) {
     clampC(); const { s } = geo(), ox = W / 2 - cx * s, oy = H / 2 - cy * s, now = performance.now();
     c.setTransform(dpr, 0, 0, dpr, 0, 0); c.fillStyle = '#2b2118'; c.fillRect(0, 0, W, H);
     if (img) c.drawImage(img, ox, oy, 1600 * s, 900 * s); else txt(c, '그림을 받는 중…', W / 2, H / 2, 20, '#fff');
-    fixed.forEach(f => { const im = patches[f.i] || (patches[f.i] = Object.assign(new Image(), { src: f.p })), pad = f.r + 6; if (im.complete) c.drawImage(im, ox + (f.x - pad) * s, oy + (f.y - pad) * s, pad * 2 * s, pad * 2 * s); c.strokeStyle = '#e63946'; c.lineWidth = 4; c.beginPath(); c.arc(ox + f.x * s, oy + f.y * s, f.r * s, 0, 7); c.stroke(); });
+    fixed.forEach(f => { c.strokeStyle = '#fff'; c.lineWidth = 7; c.beginPath(); c.arc(ox + f.x * s, oy + f.y * s, f.r * s, 0, 7); c.stroke(); c.strokeStyle = '#e63946'; c.lineWidth = 4; c.beginPath(); c.arc(ox + f.x * s, oy + f.y * s, f.r * s, 0, 7); c.stroke(); });
     marks = marks.filter(m => now - m.t < (m.k === 'pend' ? 3000 : m.k === 'hit' ? 1500 : 1300));
     marks.forEach(m => {
       const X = ox + m.x * s, Y = oy + m.y * s, k = Math.min(1, (now - m.t) / 300), R = 26;

@@ -654,16 +654,16 @@ const GAMEDEF = {
       const c = g.cand[i]; delete g.cand[i]; if (!c || !c.length || g.fixed[i]) return;
       c.sort((a, b) => a.at - b.at || a.n - b.n); const w = c[0].id, s = g.spots[i];
       g.fixed[i] = w; g.fixedBy[w] = (g.fixedBy[w] || 0) + 1; g.found++; ctx.score(w, 10); ctx.stat(w, 'fix');
-      ctx.tell(w, { k: 'diff', r: 'hit', x: c[0].x, y: c[0].y, b: '찾았어요! 복원 완료', s: ctx.practice ? '연습판' : '+10점', c: 'green' });
-      c.slice(1).forEach(o => { if (o.id !== w) ctx.tell(o.id, { k: 'diff', r: 'already', x: o.x, y: o.y, b: '먼저 고쳤어요!', s: ctx.name(w) + '이(가) 먼저', c: 'warn' }); });
-      const df = ctx.P().df; df.fixed = df.fixed.concat([{ i, x: s.x, y: s.y, r: s.r, by: ctx.name(w), p: this.patch(g, s) }]); df.last = ctx.name(w);
+      ctx.tell(w, { k: 'diff', r: 'hit', x: c[0].x, y: c[0].y, b: '찾았어요!', s: ctx.practice ? '연습판' : '+10점', c: 'green' });
+      c.slice(1).forEach(o => { if (o.id !== w) ctx.tell(o.id, { k: 'diff', r: 'already', x: o.x, y: o.y, b: '이미 찾은 곳이에요!', s: ctx.name(w) + '이(가) 먼저', c: 'warn' }); });
+      const df = ctx.P().df; df.fixed = df.fixed.concat([{ i, x: s.x, y: s.y, r: s.r, by: ctx.name(w) }]);   // 그림은 그대로 두고 동그라미만 표시 df.last = ctx.name(w);
       ctx.setPub({ df }); ctx.beep(990, 0.1); FX.stars(810 + s.x * 750 / 1600, 230 + s.y * 422 / 900, 8); FX.pop(810 + s.x * 750 / 1600, 250 + s.y * 422 / 900, ctx.name(w), '#e63946', 30);
       if (g.fixed.every(Boolean)) ctx.after(1200, () => this.close(ctx, g));
     },
     close(ctx, g) {
       if (!g.open) return; g.open = false; clearTimeout(g.tm); ctx.askClose();
       const df = ctx.P().df; df.rev = g.spots.map((s, i) => (g.fixed[i] ? null : { x: s.x, y: s.y, r: s.r })).filter(Boolean);
-      df.cls = `우리 반이 ${g.spots.length}곳 중 ${g.fixed.filter(Boolean).length}곳 복원`;
+      df.cls = `우리 반이 ${g.spots.length}곳 중 ${g.fixed.filter(Boolean).length}곳 찾음`;
       ctx.setPub({ ph: 'reveal', df, can: 'next', canLabel: g.i + 1 < g.list.length ? '다음 그림' : '결과 보기' });
     },
     cmd(ctx, g, m) { if (m.t === 'close' && g.open) { this.close(ctx, g); return true; } if (m.t === 'next' && ctx.P().ph === 'reveal') { this.round(ctx, g); return true; } },
@@ -677,32 +677,27 @@ const GAMEDEF = {
         if (L.lock) { g.lock[id] = now + lk * 1000; g.miss[id] = []; return ctx.tell(id, { k: 'diff', r: 'lock', until: g.lock[id], x, y, b: lk + '초 잠금!', s: '아무 데나 막 누르면 잠겨요', c: 'red' }); }
         return ctx.tell(id, { k: 'diff', r: 'miss', x, y, b: '여기는 아니에요', s: '', c: 'red' });
       }
-      if (g.fixed[i]) return ctx.tell(id, { k: 'diff', r: 'already', x, y, b: '먼저 고쳤어요!', s: '', c: 'warn' });
+      if (g.fixed[i]) return ctx.tell(id, { k: 'diff', r: 'already', x, y, b: '이미 찾은 곳이에요!', s: '', c: 'warn' });
       if (!g.cand[i]) { g.cand[i] = []; ctx.after(250, () => this.award(ctx, g, i)); }
       g.cand[i].push({ id, at: e.at, n: e.n, x, y });
     },
     bot(ctx, g, id) { if (g.open && Math.random() < 0.04) { const s = g.spots[(Math.random() * g.spots.length) | 0], good = Math.random() < 0.3; ctx.botEv(id, { k: 'tap', x: good ? s.x / 1600 : Math.random(), y: good ? s.y / 900 : Math.random() }); } },
-    end(ctx, g) { return { type: 'solo', title: '복원한 곳', unit: '곳', rows: Sim.rankBy(ctx.active().map(id => ({ id, v: g.fixedBy[id] || 0 })), o => o.v, true), cls: `우리 반이 모두 ${g.total}곳 중 ${g.found}곳 복원` }; },
+    end(ctx, g) { return { type: 'solo', title: '찾은 곳', unit: '곳', rows: Sim.rankBy(ctx.active().map(id => ({ id, v: g.fixedBy[id] || 0 })), o => o.v, true), cls: `우리 반이 모두 ${g.total}곳 중 ${g.found}곳 찾음` }; },
     draw(c, S, g) {
       const P = S.pub, df = P.df, t = S.t;
       c.fillStyle = '#f3e9dc'; c.fillRect(0, 0, 1600, 900); c.fillStyle = '#c9a77c'; c.fillRect(0, 800, 1600, 100);
       if (!df || !g) { head(c, '미술관 · 틀린 그림 찾기'); return; }
       rr(c, 40, 20, 1520, 150, 28, '#fff', '#2b2118', 6);
       txt(c, `${df.title} · 남은 틀린 곳 ${df.total - df.fixed.length}개`, 80, 70, 46, '#222', 'left');
-      txt(c, df.last ? `방금 ${df.last}이(가) 복원!` : '폰에서 확대해서 틀린 곳을 터치!', 80, 130, 34, df.last ? '#e63946' : '#888', 'left');
+      txt(c, df.last ? `방금 ${df.last}이(가) 찾았어요!` : '폰에서 확대해서 틀린 곳을 터치!', 80, 130, 34, df.last ? '#e63946' : '#888', 'left');
       if (P.ph === 'play') timer(c, 1440, 96, Math.max(0, (df.until - Net.now()) / 1000), 120);
       const fw = 750, fh = 422, y = 230;
       [[g.a, 40, '원본'], [g.b, 810, '틀린 그림']].forEach(([cv, x, label], k) => {
         rr(c, x - 14, y - 14, fw + 28, fh + 28, 10, '#b8860b', '#5a3e00', 6); c.drawImage(cv, x, y, fw, fh);
         txt(c, label, x + fw / 2, y + fh + 50, 34, '#2b2118');
-        if (k === 1) {
+        {   // 찾은 곳: 원본과 틀린 그림 양쪽에 빨간 동그라미만 (그림은 바꾸지 않아 친구들이 비교할 수 있다)
           const s = fw / 1600;
-          (S.patch = S.patch || {});
-          df.fixed.forEach(f => {
-            const im = S.patch[f.p.length + ':' + f.i] || (S.patch[f.p.length + ':' + f.i] = Object.assign(new Image(), { src: f.p }));
-            const pad = f.r + 6; if (im.complete) c.drawImage(im, x + (f.x - pad) * s, y + (f.y - pad) * s, pad * 2 * s, pad * 2 * s);
-            c.strokeStyle = '#e63946'; c.lineWidth = 6; c.beginPath(); c.arc(x + f.x * s, y + f.y * s, f.r * s + 4, 0, 7); c.stroke();
-          });
+          df.fixed.forEach(f => { c.strokeStyle = '#fff'; c.lineWidth = 10; c.beginPath(); c.arc(x + f.x * s, y + f.y * s, f.r * s + 4, 0, 7); c.stroke(); c.strokeStyle = '#e63946'; c.lineWidth = 6; c.stroke(); });
           (df.rev || []).forEach(f => { c.strokeStyle = '#ffd400'; c.lineWidth = 6 + Math.sin(t * 8) * 3; c.beginPath(); c.arc(x + f.x * s, y + f.y * s, f.r * s + 6, 0, 7); c.stroke(); });
         }
       });
