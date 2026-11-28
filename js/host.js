@@ -84,6 +84,7 @@ async function startHost(code) {
       case 'end': if (P.scene === 'game' && P.ph !== 'result' && (P.ph !== 'intro' || G)) { if (sim && (P.ph === 'play')) { if (P.gid === 'terr') sim.list.forEach(pl => sim.clearTrail(pl)); } result(); } break;
       case 'map': clearTimeout(timer); hush(); clearG(); sim = null; paused = false; setPub({ scene: 'map', ph: null, q: null, res: null, paused: false }); break;
       case 'finish': finish(); break;
+      case 'qr': setPub({ qr: !P.qr }); break;
       case 'teams': nTeams = m.n || nTeams; shuffleTeams(); break;
       case 'team': if (S.players[m.pid]) Net.set(base + '/players/' + m.pid + '/tm', ((S.players[m.pid].tm || 0) + 1) % nTeams); break;
       case 'hide': if (S.players[m.pid]) Net.set(base + '/players/' + m.pid + '/hide', S.players[m.pid].hide ? null : true); break;
@@ -335,12 +336,15 @@ async function startHost(code) {
   let ac; function beep(f, d, type) { try { ac = ac || new (window.AudioContext || window.webkitAudioContext)(); const o = ac.createOscillator(), g = ac.createGain(); o.type = type || 'sine'; o.frequency.value = f; g.gain.value = 0.08; o.connect(g); g.connect(ac.destination); o.start(); o.stop(ac.currentTime + d); } catch (e) { } }
 
   /* ── 그리기 ── */
-  function fit() { const s = Math.min(innerWidth / 1600, innerHeight / 900); cv.style.width = 1600 * s + 'px'; cv.style.height = 900 * s + 'px'; Object.assign(ox3box.style, { left: (innerWidth - 1600 * s) / 2 + 'px', top: (innerHeight - 900 * s) / 2 + 'px', width: 1600 * s + 'px', height: 900 * s + 'px' }); qrBox.style.transform = `scale(${s})`; qrBox.style.left = (innerWidth - 1600 * s) / 2 + 60 * s + 'px'; qrBox.style.top = (innerHeight - 900 * s) / 2 + 250 * s + 'px'; }
+  function fit() { const s = Math.min(innerWidth / 1600, innerHeight / 900); cv.style.width = 1600 * s + 'px'; cv.style.height = 900 * s + 'px'; Object.assign(ox3box.style, { left: (innerWidth - 1600 * s) / 2 + 'px', top: (innerHeight - 900 * s) / 2 + 'px', width: 1600 * s + 'px', height: 900 * s + 'px' }); const ox0 = (innerWidth - 1600 * s) / 2, oy0 = (innerHeight - 900 * s) / 2;
+    if (qrBox.classList.contains('mini')) { const m = s * 0.55; qrBox.style.transform = `scale(${m})`; qrBox.style.left = ox0 + 16 * s + 'px'; qrBox.style.top = oy0 + 900 * s - (qrBox.offsetHeight || 540) * m - 40 * s + 'px'; }
+    else { qrBox.style.transform = `scale(${s})`; qrBox.style.left = ox0 + 60 * s + 'px'; qrBox.style.top = oy0 + 250 * s + 'px'; } }
   addEventListener('resize', fit); fit();
   let lastCount = -1; const host = { con: null };
-  function frame(ms) {
+  function frame(ms) { requestAnimationFrame(frame); try { frameBody(ms); } catch (err) { console.error('교실 화면 그리기 오류', err); } }
+  function frameBody(ms) {
     S.t = ms / 1000; const P = S.pub, t = S.t;
-    qrBox.style.display = P.scene === 'lobby' ? '' : 'none';
+    const qrOn = P.scene === 'lobby' || !!P.qr; qrBox.style.display = qrOn ? '' : 'none'; qrBox.classList.toggle('mini', qrOn && P.scene !== 'lobby'); if (qrOn && qrBox.dataset.m !== String(P.scene === 'lobby')) { qrBox.dataset.m = String(P.scene === 'lobby'); fit(); }
     if (P.scene !== 'lobby' && ctlHelp.isConnected) ctlHelp.remove();   // 입장이 끝나면 안내는 저절로 닫힌다(⚙ 진행 서랍에도 같은 버튼이 있다)
     const con = ctlOn(); if (con !== host.con) { host.con = con; gear.style.display = con ? 'none' : ''; if (con) { drawer.classList.add('hidden'); if (ctlHelp.isConnected) ctlHelp.remove(); } }
     c.setTransform(1, 0, 0, 1, 0, 0); c.save(); FX.pre(c);
@@ -365,7 +369,6 @@ async function startHost(code) {
       if (P.paused) { c.fillStyle = 'rgba(0,0,0,.5)'; c.fillRect(0, 0, 1600, 900); txt(c, '잠깐 멈춤', 800, 450, 140, '#fff'); }
     }
     c.restore(); FX.draw(c);
-    requestAnimationFrame(frame);
   }
   function overlayIntro(P) {
     const g = GAMES[P.gid], t = S.t; c.fillStyle = 'rgba(20,14,40,.55)'; c.fillRect(0, 0, 1600, 900);
@@ -422,6 +425,10 @@ async function startHost(code) {
   }
 
   ctl = buildControl(drawer, { screen: true, code, send: cmd, S, active });
+  // 지도에서 여행지를 직접 눌러도 그곳으로 날아간다 (옵션은 ⚙ 진행 서랍에서 고른 값)
+  const mapHit = e => { if (S.pub.scene !== 'map') return null; const r = cv.getBoundingClientRect(), x = (e.clientX - r.left) * 1600 / r.width, y = (e.clientY - r.top) * 900 / r.height; let best = null, bd = 85; for (const id in GAMES) { const g = GAMES[id]; if (!g.ready || !g.xy) continue; const d = Math.hypot(g.xy[0] - x, g.xy[1] - y); if (d < bd) { bd = d; best = id; } } return best; };
+  cv.addEventListener('click', e => { const id = mapHit(e); if (id) cmd({ t: 'go', gid: id, o: ctl.opts ? ctl.opts() : {} }); });
+  cv.addEventListener('mousemove', e => (cv.style.cursor = mapHit(e) ? 'pointer' : ''));
   drawer.prepend(el('div', { class: 'cblk' }, [el('h3', { text: '노트북 조종판' }), el('div', { class: 'hint', text: '이 서랍은 전광판에 그대로 보여요. 정답이 보이면 안 되는 게임은 조종판 창에서 진행해요.' }), el('button', { class: 'b pri', text: '🖥 조종판 새 창으로 열기', onclick: openCtl })]));
   requestAnimationFrame(frame);
   window.__host = { S, cmd, getSim: () => sim, gs: () => Gs };   // 자동 시험용

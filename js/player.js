@@ -76,7 +76,7 @@ async function startPlayer(code) {
   let lastMsg = null, askKey = null, askClosed = null, env = { sel: {}, me: uid, send: e => Net.ev(base + '/ev/' + uid, Object.assign({ q: S.pub.ask && S.pub.ask.key, ct: Net.now(), n: Date.now() + Math.random() }, e)) };
   let lastOx = null, lastRes = null, endInfo = null, lastTs = 0, toastT = 0, cam = { x: 800, y: 450 }, endShown = false, joined = true;
 
-  Net.on(base + '/pub', v => { const prev = S.pub; S.pub = v || {}; if (prev.gid !== S.pub.gid || prev.scene !== S.pub.scene) { S.disp = {}; S.fallT = {}; lastOx = null; if (S.pub.ph !== 'result') lastRes = null; lastMsg = null; } if (S.pub.ph === 'play' && S.pub.gid === 'ox') lastOx = null; if (S.pub.scene === 'end') showEnd(); });
+  Net.on(base + '/pub', v => { const prev = S.pub; S.pub = v || {}; if (prev.gid !== S.pub.gid || prev.scene !== S.pub.scene) { if (prev.gid !== S.pub.gid) S.st = null; askKey = null; S.disp = {}; S.fallT = {}; lastOx = null; if (S.pub.ph !== 'result') lastRes = null; lastMsg = null; } if (S.pub.ph === 'play' && S.pub.gid === 'ox') lastOx = null; if (S.pub.scene === 'end') showEnd(); });
   // 지렁이: 사탕·가시가 안 바뀌면 빠진 채로 온다 → 앞에 받은 것을 그대로 쓴다
   Net.on(base + '/st', v => { if (v && v.w && S.st && S.st.w) { if (!v.ob && S.st.ob) v.ob = S.st.ob; if (!v.mn && S.st.mn) v.mn = S.st.mn; } S.st = v; });
   Net.on(base + '/grid', v => (S.grid = v));
@@ -180,7 +180,8 @@ async function startPlayer(code) {
   }
 
   const VIEW = { maze: 300, terr: 560, worm: 720 };
-  function frame(ms) {
+  function frame(ms) { requestAnimationFrame(frame); try { frameBody(ms); } catch (err) { console.error('폰 화면 그리기 오류', err); } }
+  function frameBody(ms) {
     S.t = ms / 1000; const P = S.pub, g = GAMES[P.gid], st = S.st || {}, t = S.t;
     const w = pv.clientWidth, hgt = pv.clientHeight, dpr = Math.min(2, devicePixelRatio || 1);
     if (pv.width !== Math.round(w * dpr) || pv.height !== Math.round(hgt * dpr)) { pv.width = Math.round(w * dpr); pv.height = Math.round(hgt * dpr); }
@@ -259,7 +260,6 @@ async function startPlayer(code) {
     }
     if (big.textContent !== B) big.textContent = B; if (sub.textContent !== U) sub.textContent = U;
     msg.className = cls + (view && !B ? ' slim' : '');
-    requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
 }

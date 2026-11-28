@@ -402,11 +402,11 @@ function drawMaze(c, S) {
 }
 function hudMaze(c, S) {
   const st = S.st || {}, ps = st.p || {};
-  card(c, 1330, 12, 258, 76, 20, 'rgba(255,255,255,.95)', 4, 5);
-  const sl = Math.ceil(st.left || 0); txt(c, st.ph === 'play' ? '남은 시간 ' + (sl >= 60 ? ((sl / 60) | 0) + '분 ' + String(sl % 60).padStart(2, '0') + '초' : sl + '초') : '보물섬 미로', 1459, 50, 30, st.left <= 10 && st.ph === 'play' ? '#e63946' : '#222');
+  card(c, 671, 12, 258, 76, 20, 'rgba(255,255,255,.95)', 4, 5);
+  const sl = Math.ceil(st.left || 0); txt(c, st.ph === 'play' ? '남은 시간 ' + (sl >= 60 ? ((sl / 60) | 0) + '분 ' + String(sl % 60).padStart(2, '0') + '초' : sl + '초') : '보물섬 미로', 800, 50, 30, st.left <= 10 && st.ph === 'play' ? '#e63946' : '#222');
   const fin = Object.keys(ps).filter(id => ps[id][2] === 'fin').sort((a, b) => ps[a][3] - ps[b][3]).slice(0, 5);
   if (fin.length) { card(c, 12, 12, 250, 40 + fin.length * 34, 16, 'rgba(255,255,255,.95)', 4, 5); txt(c, '보물 찾은 순서', 137, 34, 22, '#b5651d'); fin.forEach((id, k) => txt(c, `${ps[id][3]}등 ${nameOf(S.players[id])}`, 30, 68 + k * 34, 24, '#222', 'left')); }
-  if (S.pub.lv) lvBadge(c, S.pub.lv, 1588, 112, 22);
+  if (S.pub.lv) pill(c, '난이도 ' + LVNAME[S.pub.lv], 943, 50, 22, LVCOL[S.pub.lv], '#fff', 'left');   // 출구(오른쪽 끝)를 가리지 않게 시간 옆에
 }
 
 /* ══════════ 13 땅따먹기 — 4가지 큰 맵 ══════════ */

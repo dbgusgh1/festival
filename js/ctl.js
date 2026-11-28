@@ -46,9 +46,11 @@ function buildControl(root, ctx) {
   const plist = el('div', { class: 'plist' });
   const people = el('div', { class: 'cblk' }, [h('참가자와 팀'), el('div', { class: 'row' }, [lab('팀 수', sel('nteams', [[2, '2팀'], [3, '3팀'], [4, '4팀']])), btn('팀 자동 편성', () => send({ t: 'teams', n: o.nteams }))]), plist]);
   const letter = el('input', { type: 'text', maxlength: 80, placeholder: '예: 한 학기 동안 고마웠어' });
+  const bQr = btn('📱 입장 QR 띄우기', () => send({ t: 'qr' }));
+  const late = el('div', { class: 'cblk' }, [h('중간 합류'), el('div', { class: 'hint', text: '나갔던 학생이나 늦게 온 학생은 이 QR을 찍고 들어와요. 지금 하는 판이 끝나면 다음 게임부터 함께해요.' }), bQr]);
   const fin = el('div', { class: 'cblk' }, [h('마무리'), lab('편지 끝에 붙일 한마디', letter), el('div', { class: 'row' }, [btn('한마디 저장', () => send({ t: 'letter', text: letter.value })), btn('행사 마치기 (교실로 돌아오기)', () => send({ t: 'finish' }), 'pri')])]);
   const test = el('div', { class: 'cblk' }, [h('시험용 (실제 학생이 아닌 가상 참가자)'), el('div', { class: 'row' }, [btn('가상 참가자 10명 넣기', () => send({ t: 'bots', n: 10 })), btn('가상 참가자 지우기', () => send({ t: 'nobots' }))])]);
-  root.replaceChildren(status, lobby, dest, game, people, fin, test);
+  root.replaceChildren(status, lobby, dest, game, late, people, fin, test);
   const show = (n, v) => (n.style.display = v ? '' : 'none');
   let pkey = '', skey = '';
   const warn = () => ctx.screen ? el('div', { class: 'err', text: '이 서랍은 전광판에 비쳐요. 노트북 조종판 창이나 선생님 폰에서 하세요.' }) : null;
@@ -76,7 +78,7 @@ function buildControl(root, ctx) {
     const g = GAMES[P.gid], where = { lobby: '입장 대기', map: '지도에서 여행지 고르는 중', fly: '이동 중', game: g ? g.place + ' · ' + g.name + (P.lv ? ' · 난이도 ' + LVNAME[P.lv] : '') : '', end: '행사 마침' }[P.scene] || '';
     status.textContent = `방 ${ctx.code} · ${ids.length}명 · ${where}` + (P.practice && P.scene === 'game' ? ' · 연습판' : '');
     show(lobby, P.scene === 'lobby'); show(dest, P.scene === 'map' || (P.scene === 'game' && P.ph === 'result') || P.scene === 'end');
-    show(game, P.scene === 'game'); show(fin, P.scene !== 'lobby');
+    show(game, P.scene === 'game'); show(fin, P.scene !== 'lobby'); show(late, P.scene !== 'lobby'); bQr.textContent = P.qr ? '📱 입장 QR 숨기기' : '📱 입장 QR 띄우기';
     show(bStart, P.ph === 'intro'); show(bPause, P.ph === 'play' || (P.gid === 'ox' && P.ph === 'reveal')); bPause.textContent = P.paused ? '계속하기' : '일시정지';
     show(bStop, P.gid === 'maze' && P.ph === 'play');
     show(bReveal, P.gid === 'ox' && P.ph === 'closed');
@@ -100,7 +102,7 @@ function buildControl(root, ctx) {
     if (e.code === 'Space') { const b = keyGo(); e.preventDefault(); if (document.activeElement && document.activeElement.blur) document.activeElement.blur(); if (b && !e.repeat) b.click(); }
     else if (e.key === 'p' || e.key === 'P' || e.key === 'ㅔ') { if (bPause.style.display !== 'none') bPause.click(); }
   });
-  return { update };
+  return { update, opts: () => Object.assign({}, o) };
 }
 
 /* 선생님 폰 조종 화면 */

@@ -178,3 +178,5 @@ body.ox3 #pknob { width: 58px; height: 58px; margin: -29px 0 0 -29px; background
 .ctlqr { align-self: center; background: #fff; padding: 8px; }
 .ctlqr img, .ctlqr canvas { display: block; }
 .b.big { font-size: 22px; padding: 14px 18px; }
+/* 게임 중 입장 QR(작게, 오른쪽 아래) */
+#qr.mini { z-index: 20; box-shadow: 0 10px 30px rgba(0,0,0,.35); }
