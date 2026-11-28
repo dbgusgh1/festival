@@ -91,6 +91,7 @@ async function startPlayer(code) {
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && performance.now() - hbAt > 5000) { Net.kick(); kickAt = performance.now(); } });
   const c = pv.getContext('2d');
   const S = { pub: {}, st: null, players: { [uid]: me }, grid: null, disp: {}, fallT: {}, born: {}, t: 0, me: uid, phone: true };
+  window.__phone = S;   // 시험용(화면 상태 확인)
   let lastMsg = null, askKey = null, askClosed = null, env = { sel: {}, me: uid, send: e => Net.ev(base + '/ev/' + uid, Object.assign({ q: S.pub.ask && S.pub.ask.key, ct: Net.now(), n: Date.now() + Math.random() }, e)) };
   let lastOx = null, lastRes = null, endInfo = null, lastTs = 0, toastT = 0, cam = { x: 800, y: 450 }, endShown = false, joined = true;
 
@@ -227,8 +228,12 @@ async function startPlayer(code) {
     const view = P.scene === 'game' && VIEW[P.gid] && S.st && (P.ph !== 'intro' || P.gid === 'worm');   // 사탕 나라는 출발 전에도 내 위치를 보여 준다
     if (view) {
       let mx = cam.x, my = cam.y;
-      if (P.gid === 'worm') { const wm = st.w && st.w[uid]; if (wm && wm[2].length) { mx = wm[2][0]; my = wm[2][1]; } } else if (st.p && st.p[uid]) { mx = st.p[uid][0]; my = st.p[uid][1]; }
-      cam.x += (mx - cam.x) * 0.25; cam.y += (my - cam.y) * 0.25;
+      let ck = 0.25;
+      if (P.gid === 'worm') {   // 내 지렁이 머리(부드럽게 미끄러지는 자리)를 화면 가운데에 둔다 → 바닥이 뚝뚝 끊기지 않고 흘러간다
+        const wm = st.w && st.w[uid], sm = wormSync(S)[uid];
+        if (sm && sm.path) { mx = sm.hx; my = sm.hy; ck = Math.hypot(mx - cam.x, my - cam.y) > 400 ? 1 : 0.45; } else if (wm && wm[2].length) { mx = wm[2][0]; my = wm[2][1]; }
+      } else if (st.p && st.p[uid]) { mx = st.p[uid][0]; my = st.p[uid][1]; }
+      cam.x += (mx - cam.x) * ck; cam.y += (my - cam.y) * ck;
       const sc = pv.width / VIEW[P.gid];
       c.fillStyle = P.gid === 'maze' ? '#1e7fd6' : P.gid === 'worm' ? '#ff8fc7' : '#222'; c.fillRect(0, 0, pv.width, pv.height);
       c.setTransform(sc, 0, 0, sc, pv.width / 2 - cam.x * sc, pv.height / 2 - cam.y * sc);
@@ -237,7 +242,7 @@ async function startPlayer(code) {
         const ws = st.w || {}, mw = ws[uid];
         if (mw) { if (S.wDead && !mw[1]) S.wRing = t + 2.5; S.wDead = !!mw[1]; }
         const ring = mw && !mw[1] && mw[2].length && (P.ph === 'intro' || P.ph === 'count' || t < (S.wRing || 0));
-        if (ring) { const r = 70 + Math.sin(t * 8) * 12; c.lineWidth = 8; c.strokeStyle = '#fff'; c.beginPath(); c.arc(mw[2][0], mw[2][1], r, 0, 7); c.stroke(); c.lineWidth = 5; c.strokeStyle = '#e63946'; c.stroke(); txt(c, '▼ 여기가 나!', mw[2][0], mw[2][1] - r - 26, 30, '#e63946', 'center', '#fff'); }
+        if (ring) { const r = 70 + Math.sin(t * 8) * 12, hs = (S.wsm || {})[uid], hx = hs && hs.path ? hs.hx : mw[2][0], hy = hs && hs.path ? hs.hy : mw[2][1]; c.lineWidth = 8; c.strokeStyle = '#fff'; c.beginPath(); c.arc(hx, hy, r, 0, 7); c.stroke(); c.lineWidth = 5; c.strokeStyle = '#e63946'; c.stroke(); txt(c, '▼ 여기가 나!', hx, hy - r - 26, 30, '#e63946', 'center', '#fff'); }
         const MW = 2400, MH = 1350, mwid = pv.width * 0.36, mhei = mwid * MH / MW, ox = pv.width - mwid - 8 * dpr, oy = 8 * dpr, k = mwid / MW;
         c.setTransform(1, 0, 0, 1, 0, 0); c.fillStyle = 'rgba(255,240,248,.92)'; c.fillRect(ox, oy, mwid, mhei); c.lineWidth = 2 * dpr; c.strokeStyle = '#e6398b'; c.strokeRect(ox, oy, mwid, mhei);
         for (const id in ws) { const w = ws[id]; if (id === uid || w[1] || !w[2].length) continue; c.fillStyle = 'rgba(80,60,90,.55)'; c.beginPath(); c.arc(ox + w[2][0] * k, oy + w[2][1] * k, 2.2 * dpr, 0, 7); c.fill(); }

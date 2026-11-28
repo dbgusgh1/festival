@@ -16,7 +16,7 @@ function el(tag, attrs, kids) {
 let QS = new URLSearchParams(window.GAS_QS != null ? window.GAS_QS : location.search);
 const APP_BASE = window.GAS_BASE || (location.origin + location.pathname);
 const appUrl = q => APP_BASE + q + (QS.has('demo') ? (q.includes('?') ? '&' : '?') + 'demo' : '');
-const APP_VER = 'v3.3';
+const APP_VER = 'v3.4';
 // 오류가 나면 빈 화면 대신 아래쪽 빨간 상자에 이유를 보여 준다 (화면을 찍어 보내면 바로 고칠 수 있게)
 function showErr(m) {
   try {

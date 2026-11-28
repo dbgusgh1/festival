@@ -643,8 +643,45 @@ function wormBack() {
   c.lineWidth = 18; c.strokeStyle = '#ff8fc7'; c.strokeRect(9, 9, MW - 18, MH - 18); c.setLineDash([30, 30]); c.strokeStyle = '#fff'; c.lineWidth = 8; c.strokeRect(9, 9, MW - 18, MH - 18); c.setLineDash([]);
   return (wormBg = cv);
 }
+/* 지렁이 부드럽게: 폰은 1초에 8번 위치를 받는다. 받을 때마다 몸이 툭 옮겨지면 어지러우므로,
+   지금 보이는 머리 자리에서 새로 받은 몸길(자기 꼬리 자국)을 따라 다음 소식이 올 때까지 일정한 속도로 미끄러지게 그린다.
+   wormSync(S)는 장면마다 한 번 부르면 되고(같은 장면에서 여러 번 불러도 같은 결과), S.wsm[id] = { path, hx, hy, dir }를 만든다. */
+function wormSync(S) {
+  const st = S.st || {}, ws = st.w || {}, now = performance.now(), M = (S.wsm = S.wsm || {});
+  for (const id in M) if (!ws[id] || ws[id][1]) delete M[id];
+  for (const id in ws) {
+    const pts = ws[id][2]; if (ws[id][1] || !pts || pts.length < 4) continue;
+    let r = M[id];
+    if (!r || r.src !== pts) {
+      const n = pts.length / 2, cum = new Float32Array(n);
+      for (let k = 1; k < n; k++) cum[k] = cum[k - 1] + Math.hypot(pts[2 * k] - pts[2 * k - 2], pts[2 * k + 1] - pts[2 * k - 1]);
+      let d = 0;
+      if (r && r.hx != null) {   // 지금 보이는 머리가 새 몸길 위 어디쯤인지 찾는다
+        let best = 1e9;
+        for (let k = 0; k < Math.min(n - 1, 40); k++) {
+          const ax = pts[2 * k], ay = pts[2 * k + 1], bx = pts[2 * k + 2], by = pts[2 * k + 3], L = cum[k + 1] - cum[k] || 1e-6;
+          let u = ((r.hx - ax) * (bx - ax) + (r.hy - ay) * (by - ay)) / (L * L); u = u < 0 ? 0 : u > 1 ? 1 : u;
+          const dd = Math.hypot(ax + (bx - ax) * u - r.hx, ay + (by - ay) * u - r.hy);
+          if (dd < best) { best = dd; d = cum[k] + L * u; }
+        }
+        if (best > 90) d = 0;   // 다시 태어남 같은 순간이동
+        const gap = now - r.t; if (gap > 15 && gap < r.iv * 3 + 80) r.iv = Math.min(320, Math.max(40, r.iv * 0.8 + gap * 1.3 * 0.2));
+      }
+      r = M[id] = { src: pts, cum, d, t: now, iv: r ? r.iv : 130, hx: r ? r.hx : pts[0], hy: r ? r.hy : pts[1], dir: r ? r.dir : 0, at: -1 };
+    }
+    if (r.at === now) continue; r.at = now;
+    const a = Math.min(1, (now - r.t) / r.iv), s0 = r.d * (1 - a), cum = r.cum, n = cum.length;
+    let k = 0; while (k < n - 2 && cum[k + 1] < s0) k++;
+    const L = cum[k + 1] - cum[k] || 1e-6, u = Math.min(1, Math.max(0, (s0 - cum[k]) / L));
+    const ax = pts[2 * k], ay = pts[2 * k + 1], bx = pts[2 * k + 2], by = pts[2 * k + 3];
+    r.hx = ax + (bx - ax) * u; r.hy = ay + (by - ay) * u; r.dir = Math.atan2(ay - by, ax - bx);
+    const path = [r.hx, r.hy]; for (let j = k + 1; j < n; j++) path.push(pts[2 * j], pts[2 * j + 1]);
+    r.path = path;
+  }
+  return M;
+}
 function drawWorm(c, S) {
-  const st = S.st || {}, t = S.t, MW = 2400, MH = 1350;
+  const st = S.st || {}, t = S.t, MW = 2400, MH = 1350, WS = wormSync(S);
   c.drawImage(wormBack(), 0, 0);
   const ob = st.ob || [];
   for (let k = 0; k < ob.length; k += 3) {
@@ -660,13 +697,14 @@ function drawWorm(c, S) {
   }
   const ws = st.w || {};
   Object.keys(ws).forEach(id => {
-    const [len, dead, pts] = ws[id], pl = S.players[id]; if (!pl || dead || pts.length < 2) return;
+    const [len, dead, raw] = ws[id], pl = S.players[id]; if (!pl || dead || raw.length < 2) return;
+    const sm = WS[id], pts = sm && sm.path && sm.path.length >= 4 ? sm.path : raw;
     const [body, line] = charCol(pl.c);
     c.lineCap = 'round'; c.lineJoin = 'round';
     c.beginPath(); c.moveTo(pts[0], pts[1]); for (let k = 2; k < pts.length; k += 2) c.lineTo(pts[k], pts[k + 1]);
     c.strokeStyle = line; c.lineWidth = 34; c.stroke(); c.strokeStyle = body; c.lineWidth = 26; c.stroke();
     c.strokeStyle = 'rgba(255,255,255,.5)'; c.lineWidth = 6; c.setLineDash([10, 30]); c.lineDashOffset = -t * 40; c.stroke(); c.setLineDash([]);
-    const dir = pts.length >= 4 ? Math.atan2(pts[1] - pts[3], pts[0] - pts[2]) : 0;
+    const dir = sm && sm.path ? sm.dir : pts.length >= 4 ? Math.atan2(pts[1] - pts[3], pts[0] - pts[2]) : 0;
     drawChar(c, pts[0], pts[1], 21, pl.c, { face: 'smile', dir, nofeet: true, name: (id === S.me ? '나 ' : nameOf(pl) + ' ') + len, nameCol: id === S.me ? '#e63946' : '#222', nameSize: S.phone ? 0 : 24 });
   });
 }

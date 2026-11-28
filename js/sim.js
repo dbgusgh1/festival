@@ -565,7 +565,7 @@
       this.lv = LV(opts.lv);
       this.dur = opts.dur || 90; this.collide = opts.collide !== false;
       this.r = rng(opts.seed || Date.now());
-      this.base = 8; this.gap = 13; this.lives = opts.lives == null ? 5 : opts.lives;   // 부활 가능 횟수 this.speed = [0, 150, 175, 205][this.lv]; this.turn = 4.2;
+      this.base = 8; this.gap = 13; this.lives = opts.lives == null ? 5 : opts.lives; this.speed = [0, 150, 175, 205][this.lv]; this.turn = 4.2;   // lives: 부활 가능 횟수
       this.w = {}; this.pids = []; this.orbs = []; this.left = this.dur; this.ph = 'idle'; this.ev = [];
       this.mines = [];
       for (let k = 0; k < (this.collide ? [0, 0, 5, 10][this.lv] : 0); k++) this.mines.push({ x: 200 + this.r() * (MW - 400), y: 200 + this.r() * (MH - 400), r: 26 });
