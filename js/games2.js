@@ -622,9 +622,12 @@ const GAMEDEF = {
   },
 
   /* ═════ 16 틀린 그림 찾기 ═════ */
+  /* (기본 사진 그림은 파일 맨 아래 DIFF_PHOTOS) */
   diff: {
     setup(ctx) {
       const mine = ctx.photos('diff'), scenes = shuffle(Object.keys(ART.SCENES)).map(k => ({ scene: k }));
+      // 기본 사진 그림: 그 난이도일 때 맨 앞에 나온다 (연습판 제외)
+      if (!ctx.practice) Object.keys(DIFF_PHOTOS).filter(k => DIFF_PHOTOS[k].lv === LVOF(ctx)).forEach(k => scenes.unshift({ photo: k }));
       let list = ctx.opts.src === 'mine' && mine.length ? mine : ctx.opts.src === 'mix' ? shuffle(scenes.concat(mine)) : scenes;
       list = list.slice(0, ctx.practice ? 1 : (ctx.opts.n || 3));
       return { list, i: -1, fixedBy: {}, total: 0, found: 0, a: document.createElement('canvas'), b: document.createElement('canvas') };
@@ -635,7 +638,8 @@ const GAMEDEF = {
       const it = g.list[g.i]; [g.a, g.b].forEach(cv => { cv.width = 1600; cv.height = 900; });
       const A = g.a.getContext('2d'), B = g.b.getContext('2d');
       const lv = LVOF(ctx); g.lv = lv;
-      if (it.scene) { const d = ART.makeDiffs(it.scene, ctx.practice ? 3 : (ctx.opts.spots || [0, 3, 5, 7][lv]), (Math.random() * 1e9) | 0, lv); ART.renderScene(A, it.scene, d.objs, false); ART.renderScene(B, it.scene, d.objs, true); g.spots = d.spots; g.title = ART.SCENES[it.scene].name; }
+      if (it.photo) { const P = DIFF_PHOTOS[it.photo], ld = u => new Promise(res => { const im = new Image(); im.onload = () => res(im); im.onerror = () => res(null); im.src = u; }); const [ia, ib] = await Promise.all([ld(P.a), ld(P.b)]); if (ia) A.drawImage(ia, 0, 0, 1600, 900); if (ib) B.drawImage(ib, 0, 0, 1600, 900); g.spots = P.spots.map(s => ({ x: s.x, y: s.y, r: s.r })); g.title = P.title; }
+      else if (it.scene) { const d = ART.makeDiffs(it.scene, ctx.practice ? 3 : (ctx.opts.spots || [0, 3, 5, 7][lv]), (Math.random() * 1e9) | 0, lv); ART.renderScene(A, it.scene, d.objs, false); ART.renderScene(B, it.scene, d.objs, true); g.spots = d.spots; g.title = ART.SCENES[it.scene].name; }
       else { const img = await ctx.loadImg(it.id); if (img) ART.cover(A, img); B.drawImage(g.a, 0, 0); ART.mutatePhoto(B, it.spots || []); g.spots = (it.spots || []).map(s => ({ x: s.x, y: s.y, r: s.r })); g.title = it.title || '사진'; }
       g.fixed = g.spots.map(() => null); g.miss = {}; g.lock = {}; g.cand = {}; g.total += g.spots.length;
       const big = document.createElement('canvas'); big.width = 2000; big.height = 1125; big.getContext('2d').drawImage(g.b, 0, 0, 2000, 1125);
@@ -721,3 +725,14 @@ Object.assign(RULES, {
   marble: ['모두의 구슬이 동시에 떨어져요', '폰으로 조종하지 않아요, 응원만!', '판, 바람개비, 범퍼에 튕기며 내려가요', '먼저 결승선을 통과한 순서대로'],
   diff: ['왼쪽이 원본, 오른쪽이 틀린 그림', '폰에서 확대해 틀린 곳을 터치', '먼저 고친 한 명만 +10점', '아무 데나 막 누르면 잠겨요']
 });
+
+/* 틀린 그림 찾기 기본 사진: a는 원본, b는 5곳을 고친 그림 (1600x900). lv 난이도에서 나온다 */
+var DIFF_PHOTOS = {
+  cabin: { a: 'img/diff_cabin.jpg', b: 'img/diff_cabin_b.jpg', title: '숲속 오두막 거실', lv: 3, spots: [
+    { x: 195, y: 330, r: 45 },   // 액자 속 빨간 꽃 → 노란 꽃
+    { x: 1183, y: 295, r: 48 },  // 벽난로 위 조명이 없어짐
+    { x: 700, y: 770, r: 72 },   // 초록 둥근 의자 → 남색
+    { x: 278, y: 512, r: 36 },   // 선반 위 황금색 화병 → 청록색
+    { x: 188, y: 455, r: 32 }    // 둘째 칸 하얀 작은 병 두 개가 없어짐
+  ] }
+};
