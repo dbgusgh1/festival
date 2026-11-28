@@ -80,7 +80,10 @@ async function startPlayer(code) {
   // 연결이 늦을 때(폰이 잠들었다 깨거나 와이파이가 흔들릴 때): 안내 + 다시 연결 + 처음부터 다시 들어가기(같은 캐릭터로 돌아온다)
   const reEnter = el('a', { class: 'b link', href: appUrl('?r=' + code), text: '처음부터 다시 들어가기' }); if (window.GAS_BASE) reEnter.target = '_top';
   const netBar = el('div', { id: 'pnet', class: 'hidden' }, [el('span', { text: '📶 교실 화면과 연결이 늦어요 · 다시 연결하는 중…' }), el('button', { class: 'b', text: '다시 연결', onclick: () => { Net.kick(); kickAt = performance.now(); } }), reEnter]);
-  app.replaceChildren(el('div', { id: 'ptop' }, [nick, score, place]), el('div', { id: 'pmid' }, [pv, pask, msg]), joy, toast, overlay, netBar);
+  const fsBtn = el('button', { id: 'pfs', title: '전체화면', text: '⛶', onclick: () => FS.toggle() }); if (!FS.ok()) fsBtn.style.display = 'none';
+  let rlArm = 0; const rlBtn = el('button', { id: 'preload', text: '🔄 새로고침', onclick: () => { if (performance.now() - rlArm < 3000) { rlBtn.textContent = '다시 들어가는 중…'; location.reload(); return; } rlArm = performance.now(); rlBtn.textContent = '한 번 더 누르면 새로고침'; rlBtn.classList.add('arm'); setTimeout(() => { if (performance.now() - rlArm >= 2900) { rlBtn.textContent = '🔄 새로고침'; rlBtn.classList.remove('arm'); } }, 3000); } });   // 조이스틱 옆이라 실수로 눌리지 않게 두 번 눌러야 한다   // 렉이 걸리면 눌러요: 같은 캐릭터·점수로 다시 들어온다
+  document.addEventListener('fullscreenchange', () => (fsBtn.textContent = FS.on() ? '🗗' : '⛶'));
+  app.replaceChildren(el('div', { id: 'ptop' }, [nick, score, place, fsBtn]), rlBtn, el('div', { id: 'pmid' }, [pv, pask, msg]), joy, toast, overlay, netBar);
   let hbAt = performance.now(), conn = true, lostAt = 0, kickAt = 0;
   Net.on(base + '/meta/hb', () => (hbAt = performance.now()));
   Net.conn(v => { conn = v; if (!v) lostAt = performance.now(); });

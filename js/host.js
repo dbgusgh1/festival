@@ -13,7 +13,11 @@ async function startHost(code) {
     el('div', { class: 'hint', text: '① 조종판 열기 → ② 이 창을 빔·TV 화면으로 옮기고 F11 → ③ 노트북에 둔 조종판으로 진행' }),
     el('button', { class: 'b pri', text: '🖥 조종판 새 창으로 열기', onclick: openCtl }), ctlErr,
     el('button', { class: 'b link', text: '이 안내 닫기 (⚙ 진행 버튼으로 진행)', onclick: () => { ctlHelp.remove(); } })]);
-  app.replaceChildren(ox3box, cv, qrBox, qrMini, gear, drawer, ctlHelp);
+  const hfs = el('button', { class: 'hbtn', text: '⛶ 전체화면', onclick: () => FS.toggle() }); if (!FS.ok()) hfs.style.display = 'none';
+  const hrl = el('button', { class: 'hbtn', text: '🔄 새로고침', onclick: () => { if (confirm('교실 화면을 새로고침할까요?\n방·참가자·점수는 그대로 남고, 지금 하던 게임 한 판만 취소돼요.')) location.reload(); } });
+  const hbar = el('div', { id: 'hbar' }, [hfs, hrl]);
+  document.addEventListener('fullscreenchange', () => (hfs.textContent = FS.on() ? '🗗 창 모드' : '⛶ 전체화면'));
+  app.replaceChildren(ox3box, cv, qrBox, qrMini, gear, drawer, ctlHelp, hbar);
   let ctlSeen = 0; const ctlOn = () => ctlSeen && Net.now() - ctlSeen < 9000;
   const c = cv.getContext('2d');
   const S = { pub: { scene: 'lobby', v: 0 }, st: null, players: {}, grid: null, disp: {}, fallT: {}, born: {}, t: 0, visited: {} };

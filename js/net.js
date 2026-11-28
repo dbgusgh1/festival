@@ -120,3 +120,15 @@ const Net = (function () {
     kick: () => {}
   };
 })();
+
+/* 전체화면 켜고 끄기 (아이폰 사파리처럼 지원하지 않는 브라우저에서는 버튼을 숨긴다) */
+const FS = {
+  ok: () => !!(document.fullscreenEnabled || document.webkitFullscreenEnabled),
+  on: () => !!(document.fullscreenElement || document.webkitFullscreenElement),
+  toggle() {
+    try {
+      if (FS.on()) (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+      else { const d = document.documentElement; (d.requestFullscreen || d.webkitRequestFullscreen).call(d); }
+    } catch (e) { }
+  }
+};
